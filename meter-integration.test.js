@@ -314,3 +314,32 @@ test('回归验证：渲染包语法与关键依赖符号完整、僵尸节点�
   assert.doesNotThrow(() => new vm.Script(liveHostSource), 'live-host.js 必须无语法错误');
   assert.equal(liveHostSource.includes('launchCliSession'), false, 'live-host.js 不得引用已删除的 launchCliSession');
 });
+
+// ============================================================================
+// 13. 回归验证：按钮选中背景样式、主题隔离与分源数据不回退全量
+// ============================================================================
+test('回归验证：切换按钮选中态样式完整、固定主题隔离宿主背景变量、分源空数据不泄漏全量', () => {
+  assert.equal(rendererSource.includes('.source-switch-bar'), true, '渲染包必须包含 .source-switch-bar 容器样式');
+  assert.equal(rendererSource.includes('.switch-pill-btn.active'), true, '渲染包必须包含 .switch-pill-btn.active 选中背景样式');
+  assert.equal(rendererSource.includes('data-theme-mode="auto"'), true, '仅 auto 模式继承宿主背景变量，固定深/浅色模式必须隔离');
+  assert.equal(rendererSource.includes('theme-light'), true, 'getSystemTheme 必须支持 Antigravity body.theme-light 类名识别');
+  assert.equal(rendererSource.includes('if (typeof initCustomColors === \'function\') initCustomColors();'), true, '启动时必须调用 initCustomColors() 初始化主题与色阶');
+
+  const payload = {
+    dailyMap: { '2026-11-14': { total: 1000, input: 600, output: 100, cache: 300, steps: 2 } },
+    dailyMapBySource: {
+      all: { '2026-11-14': { total: 1000, input: 600, output: 100, cache: 300, steps: 2 } },
+      desktop: { '2026-11-14': { total: 1000, input: 600, output: 100, cache: 300, steps: 2 } },
+      cli: {}
+    },
+    summary: { grandTotalTokens: 1000, todayTokens: 1000, monthTokens: 1000, yearTokens: 1000, totalConversations: 5 },
+    referenceCost: {
+      all: { totalTokens: 1000, inputTokens: 600, outputTokens: 100, cacheTokens: 300 },
+      currentMonth: { totalTokens: 1000, inputTokens: 600, outputTokens: 100, cacheTokens: 300 }
+    }
+  };
+  const cliNormalized = core.normalizeTokenHistoryPayload(payload, { source: 'cli', todayStr: '2026-11-14' });
+  assert.equal(cliNormalized.summary.grandTotalTokens, 0, 'CLI 无数据时总量必须为 0，不得回退全量 referenceCost');
+  assert.equal(cliNormalized.summary.monthTokens, 0, 'CLI 无数据时本月量必须为 0，不得回退全量 referenceCost');
+  assert.equal(cliNormalized.summary.totalConversations, 0, 'CLI 分源模式不得误用全量 totalConversations');
+});

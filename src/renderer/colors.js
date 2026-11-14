@@ -85,10 +85,20 @@
       if (typeof document !== 'undefined') {
         const root = document.documentElement;
         const body = document.body;
+        const hasCls = (el, name) => Boolean(el?.classList?.contains?.(name));
         if (root?.getAttribute('data-theme') === 'light' || body?.getAttribute('data-theme') === 'light') return 'light';
-        if (root?.classList?.contains('light') || body?.classList?.contains('light')) return 'light';
+        if (hasCls(root, 'light') || hasCls(body, 'light') || hasCls(root, 'theme-light') || hasCls(body, 'theme-light') || hasCls(body, 'vscode-light')) return 'light';
         if (root?.getAttribute('data-theme') === 'dark' || body?.getAttribute('data-theme') === 'dark') return 'dark';
-        if (root?.classList?.contains('dark') || body?.classList?.contains('dark')) return 'dark';
+        if (hasCls(root, 'dark') || hasCls(body, 'dark') || hasCls(root, 'theme-dark') || hasCls(body, 'theme-dark') || hasCls(body, 'vscode-dark')) return 'dark';
+        if (typeof getComputedStyle === 'function' && body) {
+          const bg = getComputedStyle(body).backgroundColor || '';
+          const m = bg.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+          if (m) {
+            const lum = (0.299 * Number(m[1]) + 0.587 * Number(m[2]) + 0.114 * Number(m[3])) / 255;
+            if (lum > 0.6) return 'light';
+            if (lum < 0.4) return 'dark';
+          }
+        }
       }
       if (typeof window !== 'undefined' && window.matchMedia) {
         if (window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
@@ -135,6 +145,7 @@
     if (!host) return;
     const activeTheme = resolveTheme();
     host.setAttribute('data-theme', activeTheme);
+    host.setAttribute('data-theme-mode', currentThemeMode);
     const btns = [el('theme-toggle'), el('theme-toggle-tokens')].filter(Boolean);
     btns.forEach(btn => {
       if (currentThemeMode === 'auto') {
@@ -167,8 +178,43 @@
   function closeColorPicker() {}
   function setPlanDetailExpanded() {}
   let planDetailExpanded = false;
+  let autoThemeObserver = null;
+  let autoThemeMediaQuery = null;
+  let onAutoThemeMediaChange = null;
 
   function initCustomColors() {
     applyTheme();
     applyCustomColors();
+    try {
+      if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {
+        autoThemeObserver = new MutationObserver(() => {
+          if (currentThemeMode === 'auto' && !state?.disposed) applyTheme();
+        });
+        if (document.documentElement) {
+          autoThemeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+        }
+        if (document.body) {
+          autoThemeObserver.observe(document.body, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+        }
+      }
+      if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+        autoThemeMediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+        onAutoThemeMediaChange = () => {
+          if (currentThemeMode === 'auto' && !state?.disposed) applyTheme();
+        };
+        autoThemeMediaQuery.addEventListener?.('change', onAutoThemeMediaChange);
+      }
+    } catch {}
+  }
+
+  function disposeColorObservers() {
+    try { autoThemeObserver?.disconnect(); } catch {}
+    autoThemeObserver = null;
+    try {
+      if (autoThemeMediaQuery && onAutoThemeMediaChange) {
+        autoThemeMediaQuery.removeEventListener?.('change', onAutoThemeMediaChange);
+      }
+    } catch {}
+    autoThemeMediaQuery = null;
+    onAutoThemeMediaChange = null;
   }

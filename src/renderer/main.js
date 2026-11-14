@@ -153,6 +153,7 @@
     } catch {}
     try { resizeObserver?.disconnect(); } catch {}
     try { hostDomObserver?.disconnect(); } catch {}
+    try { if (typeof disposeColorObservers === 'function') disposeColorObservers(); } catch {}
     try {
       if (typeof onWindowResize === 'function') window.removeEventListener?.('resize', onWindowResize);
       if (typeof onWindowFocus === 'function') window.removeEventListener?.('focus', onWindowFocus);
@@ -1351,12 +1352,24 @@
 
   // 数据源切换（全部 / 桌面 / CLI）
   let activeTokenSource = 'all';
-  function switchTokenSource(src) {
-    activeTokenSource = src;
-    try { localStorage?.setItem('ag_token_source_v1', src); } catch {}
+  try {
+    const savedSrc = typeof localStorage !== 'undefined' && localStorage.getItem('ag_token_source_v1');
+    if (savedSrc === 'all' || savedSrc === 'desktop' || savedSrc === 'cli') {
+      activeTokenSource = savedSrc;
+    }
+  } catch {}
+  function syncTokenSourceButtons(src) {
     setPillActive(el('src-tab-all'), src === 'all');
     setPillActive(el('src-tab-desktop'), src === 'desktop');
     setPillActive(el('src-tab-cli'), src === 'cli');
+  }
+  syncTokenSourceButtons(activeTokenSource);
+
+  function switchTokenSource(src) {
+    if (src !== 'all' && src !== 'desktop' && src !== 'cli') src = 'all';
+    activeTokenSource = src;
+    try { localStorage?.setItem('ag_token_source_v1', src); } catch {}
+    syncTokenSourceButtons(src);
 
     if (ANTIGRAVITY_TOKEN_DATA.rawPayload) {
       applyTokenHistoryPayload(ANTIGRAVITY_TOKEN_DATA.rawPayload);
@@ -3031,7 +3044,11 @@
     if (tTotalVal) tTotalVal.textContent = fmtCardM(totalTokens);
     if (tTotalSub) tTotalSub.textContent = `${totalTokens.toLocaleString('en-US')} Tokens`;
     if (tTodayVal) tTodayVal.textContent = fmtCardM(shownToday);
-    if (tTodaySub) tTodaySub.textContent = `${convCount} 会话实时累加`;
+    if (tTodaySub) {
+      tTodaySub.textContent = activeTokenSource === 'all'
+        ? `${convCount} 会话实时累加`
+        : `${activeTokenSource === 'cli' ? 'CLI 终端' : '桌面客户端'} · ${totalDays} 天活动`;
+    }
     if (tMonthVal) tMonthVal.textContent = fmtCardM(monthTokens);
     if (tMonthSub) tMonthSub.textContent = `日均约 ${fmtCardM(avgMonth)}`;
     if (tYearVal) tYearVal.textContent = fmtCardM(yearTokens);
@@ -4101,6 +4118,7 @@
     snapshot: () => ({ route: state.route, count: state.count, latest: state.latest, scan: state.scan, requestError: state.requestError, scanError: state.scanError, scanBusy: state.scanBusy, layoutMode: state.layoutMode, sessionCalls: state.sessionCalls, sessionCostTotal: state.sessionCostTotal }),
     dispose: disposeInstance
   };
+  if (typeof initCustomColors === 'function') initCustomColors();
   void restoreSettingsFromHost();
   render();
   tick();

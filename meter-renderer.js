@@ -100,14 +100,14 @@
       -webkit-app-region:no-drag;user-select:none;display:inline-flex;align-items:center;gap:2px;
       height:28px;flex-shrink:0;vertical-align:middle;
 
-      /* 优先复用 Antigravity 0 级宿主主题变量，无变量时回退深色默认值 */
-      --ag-toolbar-fg:var(--secondary-foreground,#b8b8c0);
-      --ag-toolbar-fg-hover:var(--foreground,#ececef);
+      /* 深色模式默认变量（隔离宿主浅色变量，防止切换固定深色时串入白色背景） */
+      --ag-toolbar-fg:#b8b8c0;
+      --ag-toolbar-fg-hover:#ececef;
       --ag-toolbar-bg:transparent;
-      --ag-toolbar-bg-hover:var(--secondary,rgba(255,255,255,0.08));
-      --ag-toolbar-bg-active:var(--secondary,rgba(255,255,255,0.12));
-      --ag-toolbar-border-focus:var(--primary,rgba(128,128,128,0.45));
-      --ag-divider:var(--border,rgba(255,255,255,0.08));
+      --ag-toolbar-bg-hover:rgba(255,255,255,0.08);
+      --ag-toolbar-bg-active:rgba(255,255,255,0.12);
+      --ag-toolbar-border-focus:rgba(167,139,250,0.55);
+      --ag-divider:rgba(255,255,255,0.08);
 
       /* 圆环与各指标默认主题色 */
       --ag-ring-track-default:rgba(255,255,255,0.20);
@@ -120,8 +120,8 @@
       --ag-token-total-default:#b8b8c0;
       --ag-token-accent-default:#a78bfa;
 
-      /* 0 级主题背景与一级/二级严格统一背景色 */
-      --ag-bg-panel-default:var(--ag-host-bg,var(--background,#181818));
+      /* 一级/二级统一深色背景（auto 模式下才适配宿主背景） */
+      --ag-bg-panel-default:#18181b;
       --ag-unified-bg:var(--ag-custom-panel-bg,var(--ag-bg-panel-default));
 
       --ag-float-bg:var(--ag-unified-bg);
@@ -199,7 +199,16 @@
       opacity:1;
     }
 
-    /* 浅色模式规范（与 0 级浅色主题协调，且一级/二级背景严格统一） */
+    /* 跟随宿主深色模式时优先复用宿主同极性变量 */
+    :host([data-theme="dark"][data-theme-mode="auto"]){
+      --ag-toolbar-fg:var(--secondary-foreground,#b8b8c0);
+      --ag-toolbar-fg-hover:var(--foreground,#ececef);
+      --ag-toolbar-bg-hover:var(--secondary,rgba(255,255,255,0.08));
+      --ag-toolbar-bg-active:var(--secondary,rgba(255,255,255,0.12));
+      --ag-bg-panel-default:var(--ag-host-bg,var(--background,#18181b));
+    }
+
+    /* 浅色模式规范（隔离宿主深色变量，auto 模式下才适配宿主背景） */
     :host([data-theme="light"]),
     :host([data-panel-tone="light"]){
       --ag-toolbar-fg:#52525b;
@@ -207,7 +216,7 @@
       --ag-toolbar-bg:transparent;
       --ag-toolbar-bg-hover:rgba(0,0,0,0.06);
       --ag-toolbar-bg-active:rgba(0,0,0,0.10);
-      --ag-toolbar-border-focus:rgba(0,0,0,0.35);
+      --ag-toolbar-border-focus:rgba(124,58,237,0.45);
       --ag-divider:rgba(0,0,0,0.08);
 
       --ag-ring-track-default:rgba(0,0,0,0.18);
@@ -220,7 +229,7 @@
       --ag-token-total-default:#52525b;
       --ag-token-accent-default:#7c3aed;
 
-      --ag-bg-panel-default:var(--ag-host-bg,var(--background,#ffffff));
+      --ag-bg-panel-default:#ffffff;
       --ag-unified-bg:var(--ag-custom-panel-bg,var(--ag-bg-panel-default));
 
       --ag-float-bg:var(--ag-unified-bg);
@@ -416,6 +425,62 @@
     :host([data-panel-tone="light"]) select option {
       background-color: #ffffff !important;
       color: #18181b !important;
+    }
+
+    :host([data-theme="light"][data-theme-mode="auto"]){
+      --ag-bg-panel-default:var(--ag-host-bg,var(--background,#ffffff));
+    }
+
+    /* 数据来源分段切换栏 & 药丸切换按钮（深/浅色清晰选中态区分） */
+    .source-switch-bar,.view-switch-bar{
+      display:inline-flex;align-items:center;
+      background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:7px;padding:2px;gap:3px;
+    }
+    :host([data-theme="light"]) .source-switch-bar,
+    :host([data-theme="light"]) .view-switch-bar{
+      background:rgba(0,0,0,0.05);
+      border-color:rgba(0,0,0,0.10);
+    }
+    .switch-pill-btn{
+      border:1px solid transparent;background:transparent;color:var(--ag-text-muted);
+      font-size:11px;font-weight:500;padding:3px 9px;border-radius:5px;cursor:pointer;
+      transition:background-color .14s ease,color .14s ease,border-color .14s ease,box-shadow .14s ease;
+      white-space:nowrap;line-height:1.35;
+    }
+    .switch-pill-btn:hover{
+      color:var(--ag-text-primary);
+      background:rgba(255,255,255,0.08);
+    }
+    :host([data-theme="light"]) .switch-pill-btn:hover{
+      background:rgba(0,0,0,0.06);
+    }
+    .switch-pill-btn.active{
+      background:rgba(167,139,250,0.22);
+      color:#ffffff;
+      border-color:rgba(167,139,250,0.48);
+      font-weight:600;
+      box-shadow:0 1px 3px rgba(0,0,0,0.28);
+    }
+    :host([data-theme="light"]) .switch-pill-btn.active{
+      background:#ffffff;
+      color:#6d28d9;
+      border-color:rgba(124,58,237,0.34);
+      box-shadow:0 1px 3px rgba(124,58,237,0.16),0 1px 2px rgba(0,0,0,0.08);
+    }
+    .panel-header-actions .switch-pill-btn{
+      border:1px solid var(--ag-btn-border);
+      background:var(--ag-bg-input);
+      color:var(--ag-text-secondary);
+      border-radius:6px;
+      padding:3px 9px;
+      font-size:11px;
+    }
+    .panel-header-actions .switch-pill-btn:hover{
+      background:var(--ag-btn-hover);
+      border-color:var(--ag-btn-border-hover);
+      color:var(--ag-text-primary);
     }
 
     /* 单元 4: 一键启动 CLI 按钮 */
@@ -692,7 +757,7 @@
     /* 全局 Token 用量一览 */
     #view-tokens{display:flex;flex-direction:column;gap:10px}
     .token-stat-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-    .t-card{background:var(--ag-bg-card);border:1px solid var(--ag-border-card);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:3px;transition:background-color .14s ease}
+    .t-card{background:var(--ag-bg-card);border:1px solid var(--ag-border-card);border-radius:8px;padding:10px;display:flex;flex-direction:column;justify-content:space-between;gap:4px;transition:background-color .14s ease}
     .t-card:hover{background:var(--ag-bg-card-hover)}
     .t-card-lbl{font-size:11px;color:var(--ag-text-muted);display:flex;justify-content:space-between}
     .t-card-val{font-size:16.5px;font-weight:700;color:var(--ag-text-primary);letter-spacing:-0.3px;font-variant-numeric:tabular-nums}
@@ -1311,8 +1376,7 @@
       <div id="tokens-main-view">
         <div class="token-stat-cards" id="token-stat-cards">
           <div class="t-card">
-            <div class="t-card-lbl"><span>累计处理 Token</span><span style="color:var(--ag-custom-token-accent,var(--ag-token-accent-default))">Total</span></div>
-            <div style="font-size:9.5px;color:var(--ag-text-muted);margin:-2px 0 4px">含缓存命中</div>
+            <div class="t-card-lbl"><span>累计处理 <small style="font-weight:400;opacity:0.75">(含缓存)</small></span><span style="color:var(--ag-custom-token-accent,var(--ag-token-accent-default))">Total</span></div>
             <div class="t-card-val" id="t-total-val">--</div>
             <div class="t-card-sub" id="t-total-sub">读取中...</div>
           </div>
@@ -1468,6 +1532,7 @@
     } catch {}
     try { resizeObserver?.disconnect(); } catch {}
     try { hostDomObserver?.disconnect(); } catch {}
+    try { if (typeof disposeColorObservers === 'function') disposeColorObservers(); } catch {}
     try {
       if (typeof onWindowResize === 'function') window.removeEventListener?.('resize', onWindowResize);
       if (typeof onWindowFocus === 'function') window.removeEventListener?.('focus', onWindowFocus);
@@ -1584,10 +1649,20 @@
       if (typeof document !== 'undefined') {
         const root = document.documentElement;
         const body = document.body;
+        const hasCls = (el, name) => Boolean(el?.classList?.contains?.(name));
         if (root?.getAttribute('data-theme') === 'light' || body?.getAttribute('data-theme') === 'light') return 'light';
-        if (root?.classList?.contains('light') || body?.classList?.contains('light')) return 'light';
+        if (hasCls(root, 'light') || hasCls(body, 'light') || hasCls(root, 'theme-light') || hasCls(body, 'theme-light') || hasCls(body, 'vscode-light')) return 'light';
         if (root?.getAttribute('data-theme') === 'dark' || body?.getAttribute('data-theme') === 'dark') return 'dark';
-        if (root?.classList?.contains('dark') || body?.classList?.contains('dark')) return 'dark';
+        if (hasCls(root, 'dark') || hasCls(body, 'dark') || hasCls(root, 'theme-dark') || hasCls(body, 'theme-dark') || hasCls(body, 'vscode-dark')) return 'dark';
+        if (typeof getComputedStyle === 'function' && body) {
+          const bg = getComputedStyle(body).backgroundColor || '';
+          const m = bg.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+          if (m) {
+            const lum = (0.299 * Number(m[1]) + 0.587 * Number(m[2]) + 0.114 * Number(m[3])) / 255;
+            if (lum > 0.6) return 'light';
+            if (lum < 0.4) return 'dark';
+          }
+        }
       }
       if (typeof window !== 'undefined' && window.matchMedia) {
         if (window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
@@ -1634,6 +1709,7 @@
     if (!host) return;
     const activeTheme = resolveTheme();
     host.setAttribute('data-theme', activeTheme);
+    host.setAttribute('data-theme-mode', currentThemeMode);
     const btns = [el('theme-toggle'), el('theme-toggle-tokens')].filter(Boolean);
     btns.forEach(btn => {
       if (currentThemeMode === 'auto') {
@@ -1666,10 +1742,45 @@
   function closeColorPicker() {}
   function setPlanDetailExpanded() {}
   let planDetailExpanded = false;
+  let autoThemeObserver = null;
+  let autoThemeMediaQuery = null;
+  let onAutoThemeMediaChange = null;
 
   function initCustomColors() {
     applyTheme();
     applyCustomColors();
+    try {
+      if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {
+        autoThemeObserver = new MutationObserver(() => {
+          if (currentThemeMode === 'auto' && !state?.disposed) applyTheme();
+        });
+        if (document.documentElement) {
+          autoThemeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+        }
+        if (document.body) {
+          autoThemeObserver.observe(document.body, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+        }
+      }
+      if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+        autoThemeMediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+        onAutoThemeMediaChange = () => {
+          if (currentThemeMode === 'auto' && !state?.disposed) applyTheme();
+        };
+        autoThemeMediaQuery.addEventListener?.('change', onAutoThemeMediaChange);
+      }
+    } catch {}
+  }
+
+  function disposeColorObservers() {
+    try { autoThemeObserver?.disconnect(); } catch {}
+    autoThemeObserver = null;
+    try {
+      if (autoThemeMediaQuery && onAutoThemeMediaChange) {
+        autoThemeMediaQuery.removeEventListener?.('change', onAutoThemeMediaChange);
+      }
+    } catch {}
+    autoThemeMediaQuery = null;
+    onAutoThemeMediaChange = null;
   }
   // =========================================================================
   // 模块 2: 宿主布局挂载、右上角原生窗口控制区预留、渐进式宽度收缩与悬浮层定位
@@ -2839,12 +2950,24 @@
 
   // 数据源切换（全部 / 桌面 / CLI）
   let activeTokenSource = 'all';
-  function switchTokenSource(src) {
-    activeTokenSource = src;
-    try { localStorage?.setItem('ag_token_source_v1', src); } catch {}
+  try {
+    const savedSrc = typeof localStorage !== 'undefined' && localStorage.getItem('ag_token_source_v1');
+    if (savedSrc === 'all' || savedSrc === 'desktop' || savedSrc === 'cli') {
+      activeTokenSource = savedSrc;
+    }
+  } catch {}
+  function syncTokenSourceButtons(src) {
     setPillActive(el('src-tab-all'), src === 'all');
     setPillActive(el('src-tab-desktop'), src === 'desktop');
     setPillActive(el('src-tab-cli'), src === 'cli');
+  }
+  syncTokenSourceButtons(activeTokenSource);
+
+  function switchTokenSource(src) {
+    if (src !== 'all' && src !== 'desktop' && src !== 'cli') src = 'all';
+    activeTokenSource = src;
+    try { localStorage?.setItem('ag_token_source_v1', src); } catch {}
+    syncTokenSourceButtons(src);
 
     if (ANTIGRAVITY_TOKEN_DATA.rawPayload) {
       applyTokenHistoryPayload(ANTIGRAVITY_TOKEN_DATA.rawPayload);
@@ -4519,7 +4642,11 @@
     if (tTotalVal) tTotalVal.textContent = fmtCardM(totalTokens);
     if (tTotalSub) tTotalSub.textContent = `${totalTokens.toLocaleString('en-US')} Tokens`;
     if (tTodayVal) tTodayVal.textContent = fmtCardM(shownToday);
-    if (tTodaySub) tTodaySub.textContent = `${convCount} 会话实时累加`;
+    if (tTodaySub) {
+      tTodaySub.textContent = activeTokenSource === 'all'
+        ? `${convCount} 会话实时累加`
+        : `${activeTokenSource === 'cli' ? 'CLI 终端' : '桌面客户端'} · ${totalDays} 天活动`;
+    }
     if (tMonthVal) tMonthVal.textContent = fmtCardM(monthTokens);
     if (tMonthSub) tMonthSub.textContent = `日均约 ${fmtCardM(avgMonth)}`;
     if (tYearVal) tYearVal.textContent = fmtCardM(yearTokens);
@@ -6361,6 +6488,7 @@ function renderHeatmapGrid(forceRebuild = false) {
     snapshot: () => ({ route: state.route, count: state.count, latest: state.latest, scan: state.scan, requestError: state.requestError, scanError: state.scanError, scanBusy: state.scanBusy, layoutMode: state.layoutMode, sessionCalls: state.sessionCalls, sessionCostTotal: state.sessionCostTotal }),
     dispose: disposeInstance
   };
+  if (typeof initCustomColors === 'function') initCustomColors();
   void restoreSettingsFromHost();
   render();
   tick();

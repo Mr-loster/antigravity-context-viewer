@@ -1510,7 +1510,9 @@
       ? payload.dailyMapBySource
       : { all: payload.dailyMap || {}, desktop: {}, cli: {} };
 
-    const targetMap = dailyMapBySource[source] || dailyMapBySource.all || payload.dailyMap || {};
+    const targetMap = Object.prototype.hasOwnProperty.call(dailyMapBySource, source)
+      ? (dailyMapBySource[source] || {})
+      : (source === 'all' ? (dailyMapBySource.all || payload.dailyMap || {}) : {});
     const normalizedMap = {};
     for (const [k, rec] of Object.entries(targetMap)) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !rec) continue;
@@ -1570,8 +1572,8 @@
       if (Number(rawSum.monthTokens) > monthTokens) monthTokens = Number(rawSum.monthTokens);
     }
 
-    const refMonth = payload.referenceCost?.currentMonth;
-    const refAll = payload.referenceCost?.all;
+    const refMonth = source === 'all' ? payload.referenceCost?.currentMonth : null;
+    const refAll = source === 'all' ? payload.referenceCost?.all : null;
     if (refMonth) {
       if (refMonth.inputTokens && !currentMonthInput) currentMonthInput = Number(refMonth.inputTokens);
       if (refMonth.cacheTokens && !currentMonthCache) currentMonthCache = Number(refMonth.cacheTokens);
@@ -1603,7 +1605,8 @@
       currentMonthOutput,
       currentMonthCache,
       activeDaysCount,
-      totalConversations: Number(rawSum.totalConversations) || activeDaysCount,
+      totalDays: activeDaysCount,
+      totalConversations: source === 'all' ? (Number(rawSum.totalConversations) || activeDaysCount) : activeDaysCount,
       firstUseDate: payload.firstUseDate || rawSum.firstUseDate || null
     };
 
