@@ -12,18 +12,16 @@ const path = require('path');
 const http = require('http');
 const crypto = require('crypto');
 const { loadAsarEngine, builtinAsar, getStateDir, findAsarPath } = require('./asar-engine');
-const { loadModulesConfig, saveModulesConfig, acquireFileLock } = require('./modules-config');
 const {
   TAGS,
+  acquireFileLock,
   validateSyntax,
-  generateProxyUtilsCode,
   generateMeterUtilsCode,
   generateMeterPreloadCode,
-  generateChinesePreloadCode,
   cleanUtilsSource,
   cleanPreloadSource,
   verifyCleanStructure
-} = require('./modular-installer');
+} = require('./installer-engine');
 
 const asar = loadAsarEngine();
 const sha = buffer => crypto.createHash('sha256').update(buffer).digest('hex');
@@ -292,23 +290,6 @@ async function install(options = {}) {
       }
     }
 
-    // 3. 模块配置解析与状态管理
-    const modulesConfig = loadModulesConfig();
-    if (options.modules) {
-      if (options.modules.meter) Object.assign(modulesConfig.modules.meter, options.modules.meter);
-      if (options.modules.chinese) Object.assign(modulesConfig.modules.chinese, options.modules.chinese);
-      if (options.modules.proxy) Object.assign(modulesConfig.modules.proxy, options.modules.proxy);
-    }
-    if (process.argv.includes('--enable-chinese')) modulesConfig.modules.chinese.enabled = true;
-    if (process.argv.includes('--disable-chinese')) modulesConfig.modules.chinese.enabled = false;
-    if (process.argv.includes('--enable-proxy')) modulesConfig.modules.proxy.enabled = true;
-    if (process.argv.includes('--disable-proxy')) modulesConfig.modules.proxy.enabled = false;
-    const proxyUrlIdx = process.argv.indexOf('--proxy-url');
-    if (proxyUrlIdx >= 0 && process.argv[proxyUrlIdx + 1]) {
-      modulesConfig.modules.proxy.proxyUrl = process.argv[proxyUrlIdx + 1];
-    }
-    saveModulesConfig(modulesConfig);
-
     const version = JSON.parse(extractAsarFile(sourceArchive, 'package.json').toString('utf8')).version;
     const stamp = new Date().toISOString().replace(/[:.]/g, '-') + '-' + Math.random().toString(36).slice(2, 8);
     const backupDir = path.join(stateDir, 'backups');
@@ -351,73 +332,26 @@ async function install(options = {}) {
       let finalUtils = cleanUtils;
       let finalPreload = cleanPreload;
 
-      // 6. 模块组装注入（使用成对标记与运行时配置门禁，默认完整注入三模块能力，通过 modules.json 精确控制开关）
-      // 若用户或测试显式传入 pureMeterOnly: true 或 --pure-meter-only，则仅注入上下文监控
-      const isPureMeterOnly = Boolean(options.pureMeterOnly || process.argv.includes('--pure-meter-only'));
+      // 6. 极简 Context Meter 监控模块组装注入
+      const meterUtils = generateMeterUtilsCode();
+      finalUtils = finalUtils
+        .replace('"use strict";', `"use strict";\n${meterUtils.headerProxyHook}`)
+        .replace('function setupNodeWrapper(env) {', `function setupNodeWrapper(env) {${meterUtils.nodeWrapperHook}`)
+        .replace("titleBarStyle: 'hidden',", `titleBarStyle: 'hidden',${meterUtils.menuBarOption}`)
+        .replace('    void win.loadURL(url);', `${meterUtils.windowLoadHook}    void win.loadURL(url);`);
 
-      // 模块 A: Proxy NoTun (免 TUN 代理组件注入)
-      const shouldInjectProxy = !isPureMeterOnly && (modulesConfig.modules.proxy.enabled || options.injectProxy !== false);
-      if (shouldInjectProxy) {
-        const proxyCode = generateProxyUtilsCode(modulesConfig.modules.proxy);
-        finalUtils = proxyCode + '\n' + finalUtils;
+      const createWinSig = 'function createWindow(url, storageManager, options) {';
+      if (finalUtils.includes(createWinSig) && !finalUtils.includes('__agDefaultStorageManager')) {
+        finalUtils = finalUtils.replace(createWinSig, createWinSig + meterUtils.storageFallback);
+      }
+      if (finalUtils.includes('wins[0].focus();') && !finalUtils.includes('ensureMeterInjected(wins[0]')) {
+        finalUtils = finalUtils.replace('wins[0].focus();', 'wins[0].focus();' + meterUtils.focusHook);
+      }
+      if (finalUtils.includes('createWindow(`${constants_1.WINDOW_ORIGIN}:${port}/`);') && !finalUtils.includes('ensureMeterInjected(_mWin')) {
+        finalUtils = finalUtils.replace('createWindow(`${constants_1.WINDOW_ORIGIN}:${port}/`);', 'const _mWin = createWindow(`${constants_1.WINDOW_ORIGIN}:${port}/`);' + meterUtils.createHook);
       }
 
-      // 模块 B: Context Meter (上下文与 Token 监控)
-      if (modulesConfig.modules.meter.enabled) {
-        const meterUtils = generateMeterUtilsCode();
-        finalUtils = finalUtils
-          .replace('"use strict";', `"use strict";\n${meterUtils.headerProxyHook}`)
-          .replace('function setupNodeWrapper(env) {', `function setupNodeWrapper(env) {${meterUtils.nodeWrapperHook}`)
-          .replace("titleBarStyle: 'hidden',", `titleBarStyle: 'hidden',${meterUtils.menuBarOption}`)
-          .replace('    void win.loadURL(url);', `${meterUtils.windowLoadHook}    void win.loadURL(url);`);
-
-        const createWinSig = 'function createWindow(url, storageManager, options) {';
-        if (finalUtils.includes(createWinSig) && !finalUtils.includes('__agDefaultStorageManager')) {
-          finalUtils = finalUtils.replace(createWinSig, createWinSig + meterUtils.storageFallback);
-        }
-        if (finalUtils.includes('wins[0].focus();') && !finalUtils.includes('ensureMeterInjected(wins[0]')) {
-          finalUtils = finalUtils.replace('wins[0].focus();', 'wins[0].focus();' + meterUtils.focusHook);
-        }
-        if (finalUtils.includes('createWindow(`${constants_1.WINDOW_ORIGIN}:${port}/`);') && !finalUtils.includes('ensureMeterInjected(_mWin')) {
-          finalUtils = finalUtils.replace('createWindow(`${constants_1.WINDOW_ORIGIN}:${port}/`);', 'const _mWin = createWindow(`${constants_1.WINDOW_ORIGIN}:${port}/`);' + meterUtils.createHook);
-        }
-
-        finalPreload += generateMeterPreloadCode();
-      }
-
-      // 模块 C: Chinese (桌面端界面汉化组件注入)
-      const shouldInjectChinese = !isPureMeterOnly && (modulesConfig.modules.chinese.enabled || options.injectChinese !== false);
-      if (shouldInjectChinese) {
-        const homeDir = os.homedir();
-        const localAppDir = process.platform === 'win32'
-          ? (process.env.LOCALAPPDATA || path.join(homeDir, 'AppData', 'Local'))
-          : (process.platform === 'darwin'
-            ? path.join(homeDir, 'Library', 'Application Support')
-            : path.join(homeDir, '.local', 'state'));
-        const dictCandidates = [
-          path.join(__dirname, 'i18n', 'zh-CN.json'),
-          path.join(__dirname, 'src', 'i18n', 'zh-CN.json'),
-          path.join(__dirname, 'dist', 'i18n', 'zh-CN.json'),
-          path.join(__dirname, '..', 'i18n', 'zh-CN.json'),
-          path.join(localAppDir, 'AntigravityContextMeter', 'i18n', 'zh-CN.json')
-        ];
-        const runtimeCandidates = [
-          path.join(__dirname, 'i18n', 'i18n-runtime.js'),
-          path.join(__dirname, 'src', 'i18n', 'i18n-runtime.js'),
-          path.join(__dirname, 'dist', 'i18n', 'i18n-runtime.js'),
-          path.join(__dirname, '..', 'i18n', 'i18n-runtime.js'),
-          path.join(localAppDir, 'AntigravityContextMeter', 'i18n', 'i18n-runtime.js')
-        ];
-        const dictP = dictCandidates.find(p => fs.existsSync(p));
-        const rtP = runtimeCandidates.find(p => fs.existsSync(p));
-        if (dictP && rtP) {
-          const dictContent = fs.readFileSync(dictP, 'utf8');
-          const runtimeContent = fs.readFileSync(rtP, 'utf8');
-          finalPreload += generateChinesePreloadCode(dictContent, runtimeContent);
-        } else {
-          throw new Error('未找到客户端汉化字典 (zh-CN.json) 或运行时脚本 (i18n-runtime.js)，拒绝在缺少必要资源时完成安装。');
-        }
-      }
+      finalPreload += generateMeterPreloadCode();
 
       // 7. 写回前对最终 JavaScript 语法做严格校验断言
       if (!validateSyntax(finalUtils, 'dist/utils.js')) {
@@ -433,8 +367,6 @@ async function install(options = {}) {
       // 8. 拷贝各模块 additions
       const additions = [
         'asar-engine.js',
-        'modules-config.js',
-        'modular-installer.js',
         'install.js',
         'restore.js',
         'meter-main.js',
@@ -442,11 +374,8 @@ async function install(options = {}) {
         'meter-renderer.js',
         'meter-collector.js',
         'meter-storage.js',
-        'meter-proxy.js',
-        'meter-cli-launcher.js',
-        'meter-context-unlock.js',
-        'local-api.js',
-        'attachment_scan.py'
+        'installer-engine.js',
+        'local-api.js'
       ];
       for (const file of additions) {
         const srcP = path.join(__dirname, file);
@@ -457,17 +386,6 @@ async function install(options = {}) {
           if (!fs.existsSync(inStaging)) {
             throw new Error(`缺少必需的模块依赖文件: ${file}，拒绝生成不完整的 ASAR 归档！`);
           }
-        }
-      }
-
-      // 拷贝 i18n 资源文件至 ASAR 内部，确保运行中客户端可离线切换汉化
-      const i18nSrcDir = path.join(__dirname, 'i18n');
-      if (fs.existsSync(i18nSrcDir)) {
-        const i18nDstDir = path.join(staging, 'dist', 'i18n');
-        fs.mkdirSync(i18nDstDir, { recursive: true });
-        for (const item of ['zh-CN.json', 'i18n-runtime.js']) {
-          const itemP = path.join(i18nSrcDir, item);
-          if (fs.existsSync(itemP)) fs.copyFileSync(itemP, path.join(i18nDstDir, item));
         }
       }
 
@@ -515,8 +433,7 @@ async function install(options = {}) {
       const previousInstalledSha256 = fs.existsSync(previousInstalledBackup) ? sha(fs.readFileSync(previousInstalledBackup)) : null;
       const origSha = fs.existsSync(backup) ? sha(fs.readFileSync(backup)) : (previousInstalledSha256 || previousManifest?.originalSha256);
 
-      const { PROJECT_VERSION } = require('./modules-config');
-      const pkgVersion = PROJECT_VERSION;
+      const pkgVersion = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version || '0.8.2';
 
       const manifest = {
         meterVersion: pkgVersion,
@@ -531,7 +448,7 @@ async function install(options = {}) {
         added: additions.map(f => 'dist/' + f),
         modified: ['dist/utils.js', 'dist/preload.js'],
         installedAt: new Date().toISOString(),
-        enabledModules: Object.entries(modulesConfig.modules).filter(([, v]) => v.enabled).map(([k]) => k)
+        enabledModules: ['meter']
       };
 
       let installCommitted = false;
@@ -561,27 +478,7 @@ async function install(options = {}) {
           throw new Error('Installed checksum mismatch');
         }
 
-        // 11. 安装后从目标 ASAR 中重新读取核心启动文件并核对哈希与启动逻辑
-        const extractedLauncher = extractAsarFile(installed, 'dist/meter-cli-launcher.js').toString('utf8');
-        const localLauncherCandidates = [
-          path.join(__dirname, 'meter-cli-launcher.js'),
-          path.join(__dirname, '..', 'meter-cli-launcher.js')
-        ];
-        const localLauncherPath = localLauncherCandidates.find(p => fs.existsSync(p));
-        const installedLauncherSha = sha(Buffer.from(extractedLauncher, 'utf8'));
-        if (localLauncherPath) {
-          const localLauncherSha = sha(fs.readFileSync(localLauncherPath));
-          if (installedLauncherSha !== localLauncherSha) {
-            throw new Error(`ASAR 内 meter-cli-launcher.js 哈希核验失败 (ASAR: ${installedLauncherSha}, Local: ${localLauncherSha})`);
-          }
-        }
-        if (extractedLauncher.includes("spawnSync('powershell.exe'") || extractedLauncher.includes('timeout: 8000')) {
-          throw new Error('ASAR 内仍然残留旧版同步 PowerShell 启动逻辑，拒绝完成安装！');
-        }
-        if (!extractedLauncher.includes('0.8.2-helper-v2')) {
-          throw new Error('ASAR 内未包含最新的 LAUNCHER_VERSION 标识，拒绝完成安装！');
-        }
-
+        // 11. 安装后从目标 ASAR 中重新读取核心启动文件并核对哈希
         const extractedMain = extractAsarFile(installed, 'dist/meter-main.js').toString('utf8');
         const localMainCandidates = [
           path.join(__dirname, 'meter-main.js'),
@@ -596,36 +493,7 @@ async function install(options = {}) {
           }
         }
 
-        // 12. 同步部署 CLI 辅助定位程序至状态目录与资源目录并核对哈希
-        let helperSha = null;
-        const helperCandidates = [
-          path.join(__dirname, 'scripts', 'cli-window-helper.exe'),
-          path.join(__dirname, '..', 'scripts', 'cli-window-helper.exe'),
-          path.join(stateDir, 'cli-window-helper.exe'),
-          path.join(path.dirname(installed), 'bin', 'cli-window-helper.exe')
-        ];
-        const helperSrc = helperCandidates.find(p => fs.existsSync(p));
-        if (helperSrc) {
-          helperSha = sha(fs.readFileSync(helperSrc));
-          const deployedHelperPath = path.join(stateDir, 'cli-window-helper.exe');
-          if (deployedHelperPath !== helperSrc) {
-            fs.copyFileSync(helperSrc, deployedHelperPath);
-          }
-          const deployedSha = sha(fs.readFileSync(deployedHelperPath));
-          if (deployedSha !== helperSha) {
-            throw new Error(`部署的 helper 哈希不一致 (目标: ${deployedSha}, 源: ${helperSha})`);
-          }
-          const resBinDir = path.join(path.dirname(installed), 'bin');
-          if (fs.existsSync(resBinDir)) {
-            try {
-              fs.copyFileSync(helperSrc, path.join(resBinDir, 'cli-window-helper.exe'));
-            } catch {}
-          }
-        }
-
-        manifest.verifiedLauncherSha256 = installedLauncherSha;
         manifest.verifiedMainSha256 = installedMainSha;
-        manifest.helperSha256 = helperSha;
         manifest.verifiedAt = new Date().toISOString();
 
         fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));

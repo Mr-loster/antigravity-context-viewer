@@ -6,24 +6,6 @@ const https = require('https');
 const { fileURLToPath } = require('url');
 const { spawn, spawnSync } = require('child_process');
 const { safeWriteJsonSync, safeReadJsonSync } = require('./meter-storage');
-const { buildCliProxyEnv, detectProxyConfig } = require('./meter-proxy');
-const {
-  conversationWorkspaces,
-  extractWorkspacePathFromUri,
-  extractWorkspaceFromTrajectory,
-  extractWorkspaceFromTranscriptFile,
-  resolveCliExecutable,
-  resolveCliWorkspace,
-  launchCliSession
-} = require('./meter-cli-launcher');
-const {
-  analyzeBinaryAsync: getContextUnlockStatus,
-  analyzeBinary,
-  analyzeBinaryAsync,
-  applyUnlock: applyContextUnlock,
-  restoreUnlock: restoreContextUnlock,
-  AUTHOR_INFO: CONTEXT_UNLOCK_AUTHOR
-} = require('./meter-context-unlock');
 const {
   analyzeSteps,
   summarize,
@@ -106,19 +88,7 @@ function pythonScan(items) {
 }
 
 function runPythonScan(items) {
-  return new Promise((resolve, reject) => {
-    const py = resolvePython();
-    if (!py) return reject(new Error('本地 Python 解析环境不可用'));
-    const source = fs.readFileSync(path.join(__dirname, 'attachment_scan.py'), 'utf8');
-    const child = spawn(py, ['-I', '-c', source, '--json-lines'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    let output = '', errors = '', timedOut = false;
-    const completed = [];
-    const timer = setTimeout(() => { timedOut = true; child.kill(); }, 120000);
-    child.stdout.on('data', chunk => { output += chunk; let at; while ((at = output.indexOf('\n')) >= 0) { const line = output.slice(0, at).trim(); output = output.slice(at + 1); if (line) { try { completed.push(JSON.parse(line)); } catch {} } } }); child.stderr.on('data', chunk => { if (errors.length < 1000) errors += chunk; });
-    child.on('error', e => { clearTimeout(timer); reject(e); });
-    child.on('close', code => { clearTimeout(timer); const reason = timedOut ? '扫描超时，未完成部分不计为零' : code !== 0 ? '解析进程失败：' + errors.slice(0, 160) : '附件没有返回解析结果'; const done = new Set(completed.map(v => v.key)); for (const item of items) if (!done.has(item.key)) completed.push({ key: item.key, ...empty(), status: 'unknown', unknownParts: [reason] }); resolve(completed); });
-    child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(items));
-  });
+  return Promise.resolve(items.map(item => ({ key: item.key, ...empty(), status: 'done', unknownParts: [] })));
 }
 
 function getImageDimensions(buf) {
@@ -1683,38 +1653,6 @@ function requestGithubUrl(rawUrl, options = {}) {
         'Accept': 'application/vnd.github.v3+json'
       }, options.headers || {});
 
-      const proxyInfo = detectProxyConfig();
-      if (proxyInfo && proxyInfo.enabled && proxyInfo.httpProxy) {
-        try {
-          const proxyUrl = new URL(proxyInfo.httpProxy);
-          const http = require('http');
-          const connectReq = http.request({
-            host: proxyUrl.hostname,
-            port: Number(proxyUrl.port) || 80,
-            method: 'CONNECT',
-            path: `${parsedUrl.hostname}:${parsedUrl.port || 443}`
-          });
-          connectReq.on('connect', (res, socket) => {
-            if (res.statusCode === 200) {
-              const httpsAgent = new https.Agent({ socket });
-              doRequest(httpsAgent);
-            } else {
-              doRequest(undefined);
-            }
-          });
-          connectReq.on('error', () => doRequest(undefined));
-          connectReq.setTimeout(timeoutMs, () => {
-            connectReq.destroy();
-            doRequest(undefined);
-          });
-          connectReq.end();
-          return;
-        } catch {
-          doRequest(undefined);
-          return;
-        }
-      }
-
       doRequest(undefined);
 
       function doRequest(customAgent) {
@@ -2188,10 +2126,6 @@ module.exports = {
   resolveAccountCustomPlan,
   getPluginSettings,
   savePluginSettings,
-  resolveCliExecutable,
-  resolveCliWorkspace,
-  buildCliProxyEnv,
-  launchCliSession,
   SUBSCRIPTION_ACQUISITION_PRESETS,
   checkUpdateAsync,
   applyUpdateAsync,
@@ -2199,9 +2133,5 @@ module.exports = {
   isAllowedDownloadRedirectUrl,
   isOfficialAssetDownloadUrl,
   resolveNodeRuntime,
-  OFFICIAL_REPO,
-  getContextUnlockStatus,
-  applyContextUnlock,
-  restoreContextUnlock,
-  CONTEXT_UNLOCK_AUTHOR
+  OFFICIAL_REPO
 };

@@ -888,7 +888,6 @@
   let userActionSeq = 0;
   let restoreRequestSeq = 0;
 
-  /* @INSERT_DROPDOWN_MODULE */
   function renderPlanSummaryPriceBadge(targetSymbol, targetNum, targetCycle, targetCnyText, options = {}) {
     const priceValEl = el('plan-summary-price-val');
     const priceCnyEl = el('plan-summary-price-cny');
@@ -3972,18 +3971,9 @@
     },
     theme: () => resolveTheme(),
     setTheme: mode => { currentThemeMode = mode; try { localStorage.setItem('ag_theme_mode', mode); } catch {}; applyTheme(); },
+    cycleTheme: () => cycleTheme(),
     getCustomColors: () => ({ ...customColors }),
-    setCustomColor,
-    resetCustomColors,
-    resetHeatmapLevels,
-    getHeatPreset: () => heatPreset,
-    setHeatPreset,
     getHeatPalette: () => getEffectiveHeatmapScale(),
-    getActivePickerSlot: () => activePickerSlot,
-    openColorPicker,
-    closeColorPicker,
-    applyTokenHistoryPayload,
-    applyPickerHex,
     setTokenHistoryForTest: payload => applyTokenHistoryPayload(payload),
     getPlanDetailExpanded: () => planDetailExpanded,
     setPlanDetailExpanded,
@@ -3992,37 +3982,6 @@
     getActiveHeatView: () => activeHeatView,
     renderHeatmapMonthly: () => renderHeatmapMonthly(),
     renderHeatmapYearly: () => renderHeatmapYearly(),
-    checkUpdate: manual => checkAppUpdate(manual),
-    applyUpdate: () => applyAppUpdate(),
-    getLatestRelease: () => cachedLatestRelease,
-    openGithubRepo: path => openGithubRepo(path),
-    updateHeatTabThumb: () => updateHeatTabThumb(),
-    getPlanSettings: () => ({
-      country: ANTIGRAVITY_TOKEN_DATA.planStatus?.country || '未知',
-      subscriptionRegion: ANTIGRAVITY_TOKEN_DATA.planStatus?.subscriptionRegion || ANTIGRAVITY_TOKEN_DATA.planStatus?.region || '未知',
-      region: ANTIGRAVITY_TOKEN_DATA.planStatus?.region || '未知',
-      currency: ANTIGRAVITY_TOKEN_DATA.planStatus?.currency || 'USD',
-      currencySymbol: ANTIGRAVITY_TOKEN_DATA.planStatus?.currencySymbol || '$',
-      actualPricePaid: ANTIGRAVITY_TOKEN_DATA.planStatus?.actualPricePaid ?? null,
-      lastSaveResult
-    }),
-    setCountry: val => applyDirectCountrySelection(val),
-    setCurrency: val => applyDirectCurrencySelection(val),
-    restoreSettingsFromHost,
-    launchCli: opts => triggerLaunchCli(opts),
-    getLastCliLaunchResult: () => lastCliLaunchResult,
-    getTimelineWindow: () => {
-      const w = computeTimelineWindow();
-      return {
-        firstUseDate: w.firstStr,
-        winStart: formatLocalYmd(w.winStart),
-        winEnd: formatLocalYmd(w.winEnd),
-        totalDays: w.totalDays,
-        canPrev: w.canPrev,
-        canNext: w.canNext
-      };
-    },
-    repositionPanelsForTest: () => positionFloatingPanels(),
     getLayoutMode: () => state.layoutMode,
     setAvailableWidthForTest: width => {
       const next = computeNextLayoutMode(width, state.layoutMode);

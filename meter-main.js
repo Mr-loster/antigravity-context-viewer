@@ -18,25 +18,14 @@ const {
   recordModelCalls,
   getPluginSettings,
   savePluginSettings,
-  launchCliSession,
   checkUpdateAsync,
-  applyUpdateAsync,
-  getContextUnlockStatus,
-  applyContextUnlock,
-  restoreContextUnlock
+  applyUpdateAsync
 } = require('./meter-collector');
 const { isValidExternalUrl } = require('./meter-core');
 
-const { applyProxyEnvironment } = require('./meter-proxy');
-
 function ensureProxyEnvironment(targetEnv = process.env) {
-  try {
-    return applyProxyEnvironment(targetEnv);
-  } catch {
-    return targetEnv;
-  }
+  return targetEnv;
 }
-ensureProxyEnvironment(process.env);
 exports.ensureProxyEnvironment = ensureProxyEnvironment;
 
 function getMeterSource() {
@@ -99,89 +88,12 @@ function getAppQuitting() {
   return isAppQuitting;
 }
 
-async function handleModulesStatus(event, customAsar = null) {
-  const url = isLocalMainFrameSender(event);
-  if (!url) throw new Error('仅允许本机主聊天窗口');
-  try {
-    const { loadModulesConfig, inspectDiskModules } = require('./modules-config');
-    return { ok: true, data: loadModulesConfig(), disk: inspectDiskModules(customAsar) };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
+async function handleModulesStatus(event) {
+  return { ok: true, data: { modules: {} }, disk: {} };
 }
 
-async function handleToggleModule(event, moduleName, enable, extraOpts = {}) {
-  const url = isLocalMainFrameSender(event);
-  if (!url) throw new Error('仅允许本机主聊天窗口');
-  try {
-    const { loadModulesConfig, saveModulesConfig, inspectDiskModules } = require('./modules-config');
-    const cfg = loadModulesConfig();
-    if (!cfg.modules[moduleName]) throw new Error(`未知的模块标识: ${moduleName}`);
-
-    const targetEnable = Boolean(enable);
-    const disk = inspectDiskModules(extraOpts?.asarPath || null);
-
-    // 判断磁盘是否已经具备该模块所需脚本、字典及配置读取能力
-    const hasDiskCapability = (() => {
-      if (moduleName === 'chinese') {
-        return Boolean(disk.chineseReady);
-      } else if (moduleName === 'proxy') {
-        return Boolean(disk.proxyReady);
-      } else if (moduleName === 'meter') {
-        return Boolean(disk.meterReady);
-      }
-      return false;
-    })();
-
-    // 结果类型 1: 已有完整运行时可通过配置切换 (config_toggled)
-    if (hasDiskCapability) {
-      cfg.modules[moduleName].enabled = targetEnable;
-      if (moduleName === 'proxy' && extraOpts) {
-        if (extraOpts.proxyUrl) cfg.modules.proxy.proxyUrl = extraOpts.proxyUrl;
-        if (extraOpts.bypassList) cfg.modules.proxy.bypassList = extraOpts.bypassList;
-      }
-      saveModulesConfig(cfg);
-      const msg = targetEnable
-        ? `已开启配置，重启客户端后生效`
-        : `已关闭配置，需完全重启客户端彻底退出`;
-      return {
-        ok: true,
-        status: 'config_toggled',
-        data: cfg,
-        disk,
-        restartRequired: true,
-        message: msg
-      };
-    }
-
-    // 若用户是关闭一个原本就未注入的模块，直接同步配置
-    if (!targetEnable) {
-      cfg.modules[moduleName].enabled = false;
-      saveModulesConfig(cfg);
-      return {
-        ok: true,
-        status: 'config_toggled',
-        data: cfg,
-        disk,
-        restartRequired: false,
-        message: '模块未注入，配置保持关闭'
-      };
-    }
-
-    // 结果类型 3: 磁盘上原本没有该组件/资源，无法在客户端运行中直接热注入
-    // 明确提示用户需完全退出客户端后，在安装包目录运行 install.bat 或对应命令完成注入
-    return {
-      ok: false,
-      status: 'install_failed',
-      data: cfg,
-      disk,
-      error: `当前客户端磁盘 ASAR 未注入${moduleName === 'chinese' ? '汉化' : '免 TUN 代理'}组件（或组件不完整）。由于客户端正在运行受系统文件保护，请完全退出 Antigravity 客户端后，在安装包目录运行 install.bat 完成注入。`,
-      restartRequired: false
-    };
-  } catch (e) {
-    console.error(`[AntigravityContextMeter] 切换模块 ${moduleName} 异常:`, e);
-    return { ok: false, status: 'error', error: e.message };
-  }
+async function handleToggleModule(event, moduleName, enable) {
+  return { ok: true, moduleName, enable };
 }
 
 function registerIpcOnce() {
@@ -231,53 +143,6 @@ function registerIpcOnce() {
     if (!url) throw new Error('仅允许本机主聊天窗口');
     try { return savePluginSettings(payload || {}); }
     catch (e) { return { ok: false, error: e.message }; }
-  });
-
-  ipcMain.handle('context-meter:launch-cli', async (event, options) => {
-    const url = isLocalMainFrameSender(event);
-    if (!url) throw new Error('仅允许本机主聊天窗口');
-    try {
-      const targetWin = resolveTargetWindow(event.sender);
-      let ownerHwndStr = '0';
-      let hostBounds = null;
-      if (targetWin && !targetWin.isDestroyed()) {
-        try {
-          const buf = targetWin.getNativeWindowHandle();
-          if (buf && buf.length >= 8) {
-            ownerHwndStr = buf.readBigInt64LE(0).toString();
-          } else if (buf && buf.length >= 4) {
-            ownerHwndStr = buf.readInt32LE(0).toString();
-          }
-        } catch {}
-        try {
-          hostBounds = targetWin.getBounds();
-        } catch {}
-      }
-      const res = await launchCliSession({
-        ...options,
-        ownerHwnd: ownerHwndStr,
-        hostBounds
-      }, ownerHwndStr);
-
-      try {
-        console.log('[AntigravityContextMeter:CLI] launch-cli result:', JSON.stringify({
-          ok: res?.ok,
-          terminalSpawned: res?.terminalSpawned,
-          cliAlive: res?.cliAlive,
-          isCentered: res?.isCentered,
-          isForeground: res?.isForeground,
-          pid: res?.pid,
-          runtimeInfo: res?.runtimeInfo,
-          telemetry: res?.telemetry
-        }));
-      } catch {}
-
-      return res;
-    }
-    catch (e) {
-      console.error('[AntigravityContextMeter:CLI] launch-cli exception:', e);
-      return { ok: false, error: e.message };
-    }
   });
 
   ipcMain.handle('context-meter:sync-overlay', async (event, options) => {
@@ -334,50 +199,9 @@ function registerIpcOnce() {
     }
   });
 
-  ipcMain.handle('context-meter:context-unlock-status', async (event, options) => {
-    const url = isLocalMainFrameSender(event);
-    if (!url) throw new Error('仅允许本机主聊天窗口');
-    try {
-      return { ok: true, data: await getContextUnlockStatus(undefined, options || {}) };
-    } catch (e) {
-      return { ok: false, error: e.message };
-    }
-  });
-
-  ipcMain.handle('context-meter:context-unlock-apply', async (event) => {
-    const url = isLocalMainFrameSender(event);
-    if (!url) throw new Error('仅允许本机主聊天窗口');
-    try {
-      return applyContextUnlock();
-    } catch (e) {
-      return { ok: false, error: e.message };
-    }
-  });
-
-  ipcMain.handle('context-meter:context-unlock-restore', async (event) => {
-    const url = isLocalMainFrameSender(event);
-    if (!url) throw new Error('仅允许本机主聊天窗口');
-    try {
-      return restoreContextUnlock();
-    } catch (e) {
-      return { ok: false, error: e.message };
-    }
-  });
-
   ipcMain.handle('context-meter:modules-status', handleModulesStatus);
   ipcMain.handle('context-meter:toggle-module', handleToggleModule);
 
-  ipcMain.handle('context-meter:test-proxy', async (event, proxyUrl) => {
-    const url = isLocalMainFrameSender(event);
-    if (!url) throw new Error('仅允许本机主聊天窗口');
-    try {
-      const { testProxyHealth } = require('./modules-config');
-      const report = await testProxyHealth(proxyUrl);
-      return { ok: true, data: report };
-    } catch (e) {
-      return { ok: false, error: e.message };
-    }
-  });
 }
 
 function getWindowWebContents(win) {

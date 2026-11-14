@@ -29,7 +29,6 @@ function buildRenderer() {
   template = template.replace(/<span id="up-pop-ver"[^>]*>v[^<]*<\/span>/g, `<span id="up-pop-ver" class="key-pill pill-good" style="font-size:10px">v${meterVersion}</span>`);
 
   const colors = fs.readFileSync(path.join(srcDir, 'colors.js'), 'utf8').trim();
-  const dropdown = fs.readFileSync(path.join(srcDir, 'dropdown.js'), 'utf8').trim();
   const heatmap = fs.readFileSync(path.join(srcDir, 'heatmap.js'), 'utf8').trim();
   let mainTemplate = fs.readFileSync(path.join(srcDir, 'main.js'), 'utf8');
 
@@ -46,7 +45,7 @@ function buildRenderer() {
   let output = mainTemplate
     .replace('  /* @INSERT_STYLES_AND_TEMPLATE */', () => domString)
     .replace('  /* @INSERT_COLORS_MODULE */', () => colors)
-    .replace('  /* @INSERT_DROPDOWN_MODULE */', () => dropdown)
+    .replace('  /* @INSERT_DROPDOWN_MODULE */', '')
     .replace('  /* @INSERT_HEATMAP_MODULE */', () => heatmap);
 
   fs.writeFileSync(targetFile, output, 'utf8');

@@ -18,7 +18,6 @@ const { loadAsarEngine, getStateDir } = require('./asar-engine');
 const { install, findAsarPath, tryHotInject } = require('./install');
 const { restore } = require('./restore');
 const { resolvePython } = require('./meter-collector');
-const { analyzeBinary, analyzeBinaryAsync, applyUnlock, restoreUnlock, AUTHOR_INFO } = require('./meter-context-unlock');
 
 const asar = loadAsarEngine();
 const sha = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -205,25 +204,8 @@ async function main() {
     await tryHotInject();
     console.log(`✅ 插件 v${manifest.meterVersion} 安装完成 (Antigravity 宿主 v${manifest.version})`);
     console.log(`✅ ASAR 持久化注入完成: ${manifest.installed} (校验 ${manifest.originalFilesVerified} 个原文件)`);
-    const { loadModulesConfig, inspectDiskModules } = require('./modules-config');
-    const cfg = loadModulesConfig();
-    const disk = inspectDiskModules(manifest.installed);
-    console.log('📦 模块状态分层报告:');
-    console.log('   - ⚡ 上下文与 Token 监控:');
-    console.log(`     * 配置状态: [配置: ${cfg.modules.meter.enabled ? '已开启' : '已关闭'}]`);
-    console.log(`     * 磁盘注入: ${disk.meter ? '✅ 已注入' : '⚪ 未注入'}`);
-    console.log(`     * 运行中加载: ${manifest.liveInjected ? '✅ 已即时挂载生效（无需重启）' : '⏳ 待下次启动客户端时生效'}`);
-
-    console.log('   - 🇨🇳 客户端界面汉化 (桌面客户端):');
-    console.log(`     * 配置状态: [配置: ${cfg.modules.chinese.enabled ? '已开启' : '已关闭'}]`);
-    console.log(`     * 磁盘组件: ${disk.chineseReady ? '✅ 已注入（支持配置门禁与离线切换）' : (disk.chinese ? '⚠️ 磁盘注入不完整' : '⚪ 未注入')}`);
-    console.log(`     * 生效说明: ${cfg.modules.chinese.enabled ? '⏳ 重启 Antigravity 客户端后加载中文' : '⚪ 默认保持官方原生英文，可在客户端面板中随时开启并重启生效'}`);
-
-    console.log('   - 🌐 免 TUN 网络直连 (本地代理):');
-    console.log(`     * 配置状态: [配置: ${cfg.modules.proxy.enabled ? '已开启' : '已关闭'}] (代理: ${cfg.modules.proxy.proxyUrl || '未配置'})`);
-    console.log(`     * 磁盘组件: ${disk.proxyReady ? '✅ 已注入（支持 Session 代理与环境变量拦截）' : (disk.proxy ? '⚠️ 磁盘注入不完整' : '⚪ 未注入')}`);
-    console.log(`     * 生效说明: ${cfg.modules.proxy.enabled ? '🔍 需通过 node cli.js proxy:test 测试连通性' : '⚪ 跟随系统默认网络栈，可在客户端面板中随时配置并开启'}`);
-    console.log(`     * 模型请求验证: 待通过真实在线会话验证 (分层标定，未发送请求前不宣称生效)`);
+    console.log(`✅ 极简上下文与额度监控 v${manifest.meterVersion} 安装完成 (Antigravity 宿主 v${manifest.version})`);
+    console.log(`✅ ASAR 持久化注入完成: ${manifest.installed}`);
     console.log(`✅ 运行中窗口热挂载状态: ${manifest.liveInjected ? '已即时生效（无需重启）' : '将在下次启动 Antigravity 时自动生效'}`);
   } else if (cmd === 'live') {
     await ensureLiveBridgeIfNeeded();
@@ -233,112 +215,7 @@ async function main() {
   } else if (cmd === 'restore' || cmd === 'uninstall') {
     const res = await restore({ path: customPath, force: isForce });
     console.log(`✅ 已完成卸载还原: ${res.restored}`);
-    console.log('📦 模块清理与运行时状态说明:');
-    console.log(`   - 磁盘处理方式: ${res.inPlaceCleaned ? '原位手术刀精准解构（保留宿主第三方修改）' : '官方原版备份整包还原'}`);
-    console.log('   - 磁盘清理状态:');
-    console.log('     * ⚡ 上下文与 Token 监控: 磁盘代码已移除');
-    console.log('     * 🇨🇳 客户端界面汉化: 磁盘注入已移除');
-    console.log('     * 🌐 免 TUN 网络直连: 磁盘代理拦截已移除');
-    console.log('   - 运行中残留与重启说明:');
-    console.log(`     * 上下文监控: ${res.hotDisposed ? '已通过 CDP 即时销毁运行实例' : '运行实例需重启客户端彻底清理'}`);
-    console.log('     * 界面汉化: 运行中已渲染 DOM 受客户端页面内存缓存影响，需完全重启客户端彻底恢复纯净英文');
-    console.log('     * 代理环境: 运行中进程已加载的 process.env 环境变量与 Electron session 代理无法即时热撤销，必须完全重启客户端以彻底退出代理环境');
-  } else if (cmd === 'unlock-status') {
-    console.log('🔍 正在检测 Antigravity 后端上下文加长状态...');
-    const st = await analyzeBinaryAsync(customPath);
-    console.log(`- 目标文件: ${st.targetPath || '未检测到'}`);
-    console.log(`- 目标架构: ${st.arch || '未知'} (${st.format || '未知'}, ${st.mode || '未知'})`);
-    console.log(`- 解锁状态: [${st.statusText || st.status}] ${st.details || st.reason || ''}`);
-    if (st.backupInfo) {
-      console.log(`- 备份文件: ${st.backupInfo.backupPath}`);
-    }
-    console.log(`- ${st.author?.credit || AUTHOR_INFO.credit} (${st.author?.url || AUTHOR_INFO.url})`);
-  } else if (cmd === 'unlock') {
-    console.log('⚡ 正在执行 Antigravity 后端上下文加长解锁...');
-    console.log(`ℹ ${AUTHOR_INFO.credit} (${AUTHOR_INFO.url})`);
-    console.log(`⚠️  ${AUTHOR_INFO.disclaimer}`);
-    const res = applyUnlock({ targetPath: customPath });
-    if (!res.ok) {
-      throw new Error(res.error);
-    }
-    console.log(`✅ ${res.message || '解锁成功！'}`);
-    if (res.backupPath) console.log(`📁 原版备份已安全保存至: ${res.backupPath}`);
-  } else if (cmd === 'unlock-restore') {
-    console.log('🔄 正在恢复 Antigravity 官方原版后端二进制...');
-    const res = restoreUnlock({ targetPath: customPath });
-    if (!res.ok) {
-      throw new Error(res.error);
-    }
-    console.log(`✅ ${res.message || '恢复完成！'}`);
-  } else if (cmd === 'modules') {
-    const { loadModulesConfig, detectAndMigrateLegacyConfigs } = require('./modules-config');
-    const cfg = loadModulesConfig();
-    const asarPath = findAsarPath(customPath);
-    let asarUtils = '';
-    let asarPreload = '';
-    try {
-      asarUtils = asar.extractFile(asarPath, 'dist/utils.js').toString('utf8');
-      asarPreload = asar.extractFile(asarPath, 'dist/preload.js').toString('utf8');
-    } catch {}
-
-    console.log('📦 [Antigravity 统一模块状态总览]');
-    console.log('1. 上下文与 Token 监控 (ContextMeter):');
-    console.log(`   - 配置状态: ${cfg.modules.meter.enabled ? '🟢 已启用' : '⚪ 已禁用'}`);
-    console.log(`   - 磁盘注入: ${asarUtils.includes('installContextMeter') ? '✅ 已注入' : '⚪ 未注入'}`);
-
-    console.log('2. 客户端界面汉化 (Chinese Desktop):');
-    console.log(`   - 配置状态: ${cfg.modules.chinese.enabled ? '🟢 已启用' : '⚪ 已禁用'}`);
-    console.log(`   - 磁盘注入: ${asarPreload.includes('Antigravity Chinese Localization') ? '✅ 已注入' : '⚪ 未注入'}`);
-    if (cfg.modules.chinese.migratedFrom) {
-      console.log(`   - 迁移来源: ${cfg.modules.chinese.migratedFrom}`);
-    }
-
-    console.log('3. 免 TUN 网络直连 (ProxyNoTun):');
-    console.log(`   - 配置状态: ${cfg.modules.proxy.enabled ? '🟢 已启用' : '⚪ 已禁用'}`);
-    console.log(`   - 代理地址: ${cfg.modules.proxy.proxyUrl || '未配置'}`);
-    console.log(`   - 绕过列表: ${cfg.modules.proxy.bypassList || '默认'}`);
-    console.log(`   - 磁盘注入: ${asarUtils.includes('Antigravity Proxy NoTun') ? '✅ 已注入' : '⚪ 未注入'}`);
-    if (cfg.modules.proxy.migratedFrom) {
-      console.log(`   - 迁移来源: ${cfg.modules.proxy.migratedFrom}`);
-    }
-  } else if (cmd === 'chinese:enable' || cmd === 'chinese:disable') {
-    const { loadModulesConfig, saveModulesConfig } = require('./modules-config');
-    const cfg = loadModulesConfig();
-    const enable = cmd === 'chinese:enable';
-    cfg.modules.chinese.enabled = enable;
-    saveModulesConfig(cfg);
-    await install({ path: customPath, modules: { chinese: { enabled: enable } } });
-    console.log(`✅ 客户端界面汉化模块已${enable ? '开启' : '关闭'}并完成 ASAR 注入同步！`);
-  } else if (cmd === 'proxy:enable' || cmd === 'proxy:disable') {
-    const { loadModulesConfig, saveModulesConfig } = require('./modules-config');
-    const cfg = loadModulesConfig();
-    const enable = cmd === 'proxy:enable';
-    cfg.modules.proxy.enabled = enable;
-    saveModulesConfig(cfg);
-    await install({ path: customPath, modules: { proxy: { enabled: enable } } });
-    console.log(`✅ 免 TUN 网络直连模块已${enable ? '开启' : '关闭'}并完成 ASAR 注入同步！`);
-  } else if (cmd === 'proxy:set') {
-    const newUrl = args[1] && !args[1].startsWith('-') ? args[1] : args[2];
-    if (!newUrl) throw new Error('请提供有效的代理地址，例如: node cli.js proxy:set http://127.0.0.1:7890');
-    const { loadModulesConfig, saveModulesConfig } = require('./modules-config');
-    const cfg = loadModulesConfig();
-    cfg.modules.proxy.proxyUrl = newUrl;
-    saveModulesConfig(cfg);
-    if (cfg.modules.proxy.enabled) {
-      await install({ path: customPath, modules: { proxy: { proxyUrl: newUrl } } });
-    }
-    console.log(`✅ 代理地址已更新为: ${newUrl}`);
-  } else if (cmd === 'proxy:test') {
-    const { loadModulesConfig, testProxyHealth } = require('./modules-config');
-    const cfg = loadModulesConfig();
-    const urlToTest = args[1] && !args[1].startsWith('-') ? args[1] : cfg.modules.proxy.proxyUrl;
-    console.log(`🔍 正在分层检测代理地址连通性: ${urlToTest}...`);
-    const r = await testProxyHealth(urlToTest);
-    console.log(`  - 1. 配置格式验证: ${r.configValid ? '✅ 合法' : '❌ 错误'}`);
-    console.log(`  - 2. 本地代理端口: ${r.proxyReachable ? '✅ 可连接' : '❌ 无法连接'}`);
-    console.log(`  - 3. 实际网络连通: ${r.internetReachable ? '✅ 可访问公网' : '⚠️ 无法访问公网 (可能节点无境外连接)'}`);
-    console.log(`  - 4. 真实模型请求: 待通过真实在线会话验证 (分层标定)`);
-    if (r.error) console.log(`  ⚠️ 诊断提示: ${r.error}`);
+    console.log(`   - 恢复方式: ${res.inPlaceCleaned ? '精准解构原位清理' : '备份整包还原'}`);
   } else if (cmd === 'status') {
     await cmdStatus(customPath);
   } else if (cmd === 'check') {
@@ -349,10 +226,7 @@ async function main() {
   node cli.js live                          免改盘 CDP 热挂载到当前运行窗口
   node cli.js status                        查看安装状态与当前对话实时上下文用量
   node cli.js check                         执行前置环境健康检查
-  node cli.js restore                       一键无损卸载并恢复备份
-  node cli.js unlock-status [--path <bin>]  检查 Antigravity 后端上下文加长状态
-  node cli.js unlock [--path <bin>]         执行上下文加长解锁（解除 256K 限制）
-  node cli.js unlock-restore [--path <bin>] 恢复官方原版二进制`);
+  node cli.js restore                       一键无损卸载并恢复备份`);
   }
 }
 

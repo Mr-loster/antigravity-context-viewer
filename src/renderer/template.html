@@ -328,49 +328,6 @@
     </div>
   </section>
 
-  <!-- 自定义颜色选取器面板（替换系统原生取色器） -->
-  <div id="color-picker-popover" hidden role="dialog" aria-label="颜色选取器">
-    <div class="cp-header">
-      <div class="cp-title">
-        <span>🎨 颜色选取器</span>
-        <span id="cp-target-name" class="cp-target-lbl"></span>
-      </div>
-      <button id="cp-close" class="panel-icon-btn" type="button" aria-label="关闭颜色选取器">×</button>
-    </div>
-    <div class="cp-toolbar">
-      <button id="cp-eyedropper" class="cp-eyedropper-btn" type="button" title="从屏幕吸取颜色">🖊 取色</button>
-      <div class="cp-presets" id="cp-presets">
-        <button class="cp-preset-dot" type="button" data-cp-hex="#ef4444" style="background:#ef4444" title="#EF4444"></button>
-        <button class="cp-preset-dot" type="button" data-cp-hex="#f97316" style="background:#f97316" title="#F97316"></button>
-        <button class="cp-preset-dot" type="button" data-cp-hex="#eab308" style="background:#eab308" title="#EAB308"></button>
-        <button class="cp-preset-dot" type="button" data-cp-hex="#22c55e" style="background:#22c55e" title="#22C55E"></button>
-        <button class="cp-preset-dot" type="button" data-cp-hex="#06b6d4" style="background:#06b6d4" title="#06B6D4"></button>
-        <button class="cp-preset-dot" type="button" data-cp-hex="#3b82f6" style="background:#3b82f6" title="#3B82F6"></button>
-        <button class="cp-preset-dot" type="button" data-cp-hex="#a855f7" style="background:#a855f7" title="#A855F7"></button>
-      </div>
-    </div>
-    <div class="cp-stage">
-      <div id="cp-side-preview" class="cp-side-preview"></div>
-      <div id="cp-sv-area" class="cp-sv-area">
-        <div id="cp-sv-thumb" class="cp-sv-thumb"></div>
-      </div>
-    </div>
-    <div id="cp-hue-wrap" class="cp-hue-wrap">
-      <div id="cp-hue-thumb" class="cp-hue-thumb"></div>
-    </div>
-    <div class="cp-rows">
-      <div class="cp-row">
-        <span class="cp-fmt-lbl">HEX</span>
-        <input id="cp-input-hex" class="cp-fmt-input" type="text" value="#652ab7" spellcheck="false" aria-label="HEX 色值输入" />
-        <button id="cp-copy-hex" class="cp-copy-btn" type="button" title="复制 HEX">📋</button>
-      </div>
-    </div>
-    <div class="cp-footer">
-      <span id="cp-status-msg" style="font-size:10.5px;color:var(--ag-text-muted)">支持直接输入或粘贴 HEX 色值</span>
-      <button id="cp-reset-slot" class="color-reset-btn" type="button">跟随主题</button>
-    </div>
-  </div>
-
   <!-- 热力图浮动 Tooltip -->
   <div class="heat-popover" id="heat-pop">
     <div class="pop-date" id="heat-pop-date">--</div>

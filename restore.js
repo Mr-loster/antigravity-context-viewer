@@ -6,14 +6,14 @@ const path = require('path');
 const http = require('http');
 const crypto = require('crypto');
 const { getStateDir, builtinAsar, loadAsarEngine } = require('./asar-engine');
-const { acquireFileLock } = require('./modules-config');
 const {
   TAGS,
+  acquireFileLock,
   validateSyntax,
   cleanUtilsSource,
   cleanPreloadSource,
   verifyCleanStructure
-} = require('./modular-installer');
+} = require('./installer-engine');
 
 const asar = loadAsarEngine();
 const sha = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -217,6 +217,7 @@ async function restore(options = {}) {
             'meter-renderer.js',
             'meter-collector.js',
             'meter-storage.js',
+            'installer-engine.js',
             'meter-proxy.js',
             'meter-cli-launcher.js',
             'meter-context-unlock.js',
