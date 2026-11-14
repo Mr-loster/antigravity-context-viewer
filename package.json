@@ -1,7 +1,7 @@
 {
   "name": "antigravity-context-viewer",
   "version": "0.8.2",
-  "description": "Antigravity 桌面客户端的对话上下文、生成速度与 Token 用量看板",
+  "description": "Antigravity 桌面客户端的极简对话上下文、生成速度 (TPS)、首字延迟 (TTFT)、Token 消耗热力图与官方模型配额监控看板",
   "main": "cli.js",
   "bin": {
     "antigravity-context-viewer": "./cli.js",
