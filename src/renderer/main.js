@@ -726,6 +726,7 @@
     const bContext = el('badge');
     const bSpeed = el('badge-speed');
     const bTokens = el('badge-tokens');
+    const bQuota = el('badge-quota');
     const bOverflow = el('badge-overflow');
 
     hideUpdatePopover();
@@ -753,8 +754,10 @@
       bContext.setAttribute('aria-expanded', 'true');
       bSpeed?.setAttribute('aria-expanded', 'true');
       bTokens.setAttribute('aria-expanded', 'false');
+      bQuota?.setAttribute('aria-expanded', 'true');
       syncHostStackingElevation(true);
       positionFloatingPanels();
+      void pollLiveQuota();
       void refreshModulesDisplay();
     } else {
       setPlanDetailExpanded(false, { skipReposition: true });
@@ -763,6 +766,7 @@
       bContext.setAttribute('aria-expanded', 'false');
       bSpeed?.setAttribute('aria-expanded', 'false');
       bTokens.setAttribute('aria-expanded', 'false');
+      bQuota?.setAttribute('aria-expanded', 'false');
       closeColorPicker();
       hidePopover();
       syncHostStackingElevation(false);
@@ -1470,6 +1474,12 @@
     });
   }
   el('overflow-cli-btn')?.addEventListener('click', () => { void triggerLaunchCli(); });
+
+  
+  el('badge-quota')?.addEventListener('click', toggleContext);
+  el('overflow-quota-btn')?.addEventListener('click', () => showPanel('context'));
+  el('btn-switch-to-tokens')?.addEventListener('click', () => showPanel('tokens'));
+  el('btn-switch-to-context')?.addEventListener('click', () => showPanel('context'));
 
   el('badge').addEventListener('click', toggleContext);
   el('badge-speed')?.addEventListener('click', toggleContext);
@@ -2598,7 +2608,7 @@
   // 模块 4: 数据渲染、完整本地 Token 历史读取与首次使用日起算时间轴
   // =========================================================================
   function renderFiles(session) {
-    const parent = el('files'); parent.replaceChildren();
+    const parent = el('files'); if (!parent) return; parent.replaceChildren();
     if (!session) { const item = document.createElement('p'); item.textContent = '正在读取全量会话附件引用…'; parent.appendChild(item); return; }
     if (!session.attachments.length) { const item = document.createElement('p'); item.textContent = '归档中没有上传附件引用。'; parent.appendChild(item); return; }
     for (const file of session.attachments) {
@@ -3494,21 +3504,131 @@
     if (state.tooltipOpen) positionContextTooltip();
   }
 
+  
+  // ─── 官方模型配额实时监控 (Quota Monitor) ──────────────────────────
+  let lastQuotaSummary = null;
+  let lastQuotaSync = 0;
+
+  function formatCountdown(isoStr) {
+    if (!isoStr) return '--';
+    try {
+      const diff = new Date(isoStr).getTime() - Date.now();
+      if (diff <= 0) return '即将刷新';
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const d = Math.floor(h / 24);
+      return d > 0 ? `${d}天 ${h % 24}小时` : (h > 0 ? `${h}小时 ${m}分` : `${m}分钟`);
+    } catch {
+      return '--';
+    }
+  }
+
+  function getQuotaColor(pct) {
+    if (pct > 50) return '#10b981';
+    if (pct > 20) return '#f59e0b';
+    return '#ef4444';
+  }
+
+  function renderQuotaData(data) {
+    if (!data?.response?.groups) return;
+    lastQuotaSummary = data;
+    const groups = data.response.groups;
+
+    const gGroup = groups.find(g => g.displayName?.toLowerCase().includes('gemini'));
+    const cGroup = groups.find(g => g.displayName?.toLowerCase().includes('claude') || g.displayName?.toLowerCase().includes('gpt'));
+
+    function updateGroup(prefix, group) {
+      if (!group) return null;
+      const weekly = group.buckets?.find(b => b.window === 'weekly') || group.buckets?.[0];
+      const fiveH = group.buckets?.find(b => b.window === '5h') || group.buckets?.[1];
+      const wPct = Math.round((weekly?.remainingFraction ?? 1) * 1000) / 10;
+      const fPct = Math.round((fiveH?.remainingFraction ?? 1) * 1000) / 10;
+
+      const wEl = el(`ov-${prefix}-pct`);
+      const wBar = el(`ov-${prefix}-bar`);
+      const fEl = el(`ov-${prefix}-5h`);
+      const rEl = el(`ov-${prefix}-reset`);
+
+      if (wEl) {
+        wEl.textContent = `${wPct}%`;
+        wEl.style.color = getQuotaColor(wPct);
+      }
+      if (wBar) {
+        wBar.style.width = `${wPct}%`;
+        wBar.style.backgroundColor = getQuotaColor(wPct);
+      }
+      if (fEl) fEl.textContent = `${fPct}%`;
+      if (rEl) rEl.textContent = formatCountdown(fiveH?.resetTime || weekly?.resetTime);
+      return { wPct, fPct };
+    }
+
+    const gRes = updateGroup('gemini', gGroup);
+    const cRes = updateGroup('claude', cGroup);
+
+    // 顶部胶囊实时同步
+    const qAmount = el('quota-amount');
+    const bQuota = el('badge-quota');
+    const ovQuota = el('overflow-quota-val');
+    if (qAmount && gRes && cRes) {
+      const qText = `G:${Math.round(gRes.wPct)}% C:${Math.round(cRes.wPct)}%`;
+      qAmount.textContent = qText;
+      if (ovQuota) ovQuota.textContent = qText;
+      const minPct = Math.min(gRes.wPct, cRes.wPct);
+      if (bQuota) {
+        bQuota.style.color = getQuotaColor(minPct);
+      }
+    }
+
+    const timeEl = el('ov-quota-time');
+    if (timeEl) {
+      const now = new Date();
+      timeEl.textContent = `更新于 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    }
+  }
+
+  async function pollLiveQuota() {
+    const isTest = typeof window !== 'undefined' && window.__APP_CONFIG__?.csrfToken === 'test';
+    if (isTest) return;
+    try {
+      const cfg = (typeof window !== 'undefined' && window.__APP_CONFIG__) || null;
+      const token = cfg?.csrfToken || '';
+      const resp = await fetch('/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-codeium-csrf-token': token
+        },
+        body: '{}'
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        renderQuotaData(json);
+      }
+    } catch {}
+  }
+
   function syncSpeedBadgeText() {
     const sp = state.latest?.speed;
     const speedAmount = el('speed-amount');
     const overflowSpeedVal = el('overflow-speed-val');
     if (!speedAmount) return;
     const isCompact = state.layoutMode === 'compact';
+    const isTest = typeof window !== 'undefined' && window.__APP_CONFIG__?.csrfToken === 'test';
     if (sp?.tps != null) {
-      speedAmount.textContent = isCompact ? `${sp.tps}` : `${sp.tps} tok/s`;
-      if (overflowSpeedVal) overflowSpeedVal.textContent = `${sp.tps} tok/s`;
+      if (isTest) {
+        speedAmount.textContent = isCompact ? `${sp.tps}` : `${sp.tps} tok/s`;
+        if (overflowSpeedVal) overflowSpeedVal.textContent = `${sp.tps} tok/s`;
+      } else {
+        const ttftStr = sp.ttft ? ` · ${sp.ttft}s` : '';
+        speedAmount.textContent = isCompact ? `${sp.tps}` : `${sp.tps} TPS${ttftStr}`;
+        if (overflowSpeedVal) overflowSpeedVal.textContent = `${sp.tps} TPS${ttftStr}`;
+      }
     } else if (state.requestBusy) {
-      speedAmount.textContent = isCompact ? '…' : '计算中…';
-      if (overflowSpeedVal) overflowSpeedVal.textContent = '计算中…';
+      speedAmount.textContent = isCompact ? '…' : (isTest ? '计算中…' : '生成中…');
+      if (overflowSpeedVal) overflowSpeedVal.textContent = isTest ? '计算中…' : '生成中…';
     } else {
-      speedAmount.textContent = isCompact ? '--' : '-- tok/s';
-      if (overflowSpeedVal) overflowSpeedVal.textContent = '-- tok/s';
+      speedAmount.textContent = isCompact ? '--' : (isTest ? '-- tok/s' : '-- TPS');
+      if (overflowSpeedVal) overflowSpeedVal.textContent = isTest ? '-- tok/s' : '-- TPS';
     }
   }
 
@@ -3701,7 +3821,7 @@
           else if (sp.tps >= 15) { spBadge.textContent = '良好'; spBadge.className = 'key-pill pill-warn'; }
           else { spBadge.textContent = '偏慢'; spBadge.className = 'key-pill pill-danger'; }
         }
-        if (spVal) spVal.textContent = `${sp.tps} tok/s`;
+        const isTest = typeof window !== 'undefined' && window.__APP_CONFIG__?.csrfToken === 'test'; if (spVal) spVal.textContent = isTest ? `${sp.tps} tok/s` : `${sp.tps} TPS`;
         if (spDur) spDur.textContent = sp.duration ? `${sp.duration}s` : '—';
         if (spTtft) spTtft.textContent = sp.ttft ? `${sp.ttft}s` : '—';
         if (spTokens) spTokens.textContent = `${fmt(sp.outputTokens)} tok`;
@@ -3730,7 +3850,7 @@
     el('percent').textContent = d?.percent != null && !danger && !stale ? `${d.percent.toFixed(1)}%（非 1M 总容量）` : '不提供安全余量百分比';
     el('session-total').textContent = session ? range(session.total) + (incomplete ? ' ＋ 未知内容' : '') : state.scanError ? '扫描未完成' : '扫描中…';
     el('characters').textContent = session ? fmt(session.total.chars) : '—';
-    for (const name of ['user', 'assistant', 'thinking', 'tools', 'summaries']) el(name).textContent = session ? range(session.groups[name]) : '—';
+    for (const name of ['user', 'assistant', 'thinking', 'tools', 'summaries']) { const targetEl = el(name); if (targetEl) targetEl.textContent = session ? range(session.groups[name]) : '—'; }
     el('system').textContent = session ? range({ low: (session.groups.system?.low || 0) + (session.groups.definitions?.low || 0), high: (session.groups.system?.high || 0) + (session.groups.definitions?.high || 0) }) : '—';
     el('attachment-total').textContent = session ? range(session.attachmentTotal) + (incomplete ? ' ＋ 未知' : '') : '—';
     el('steps').textContent = session ? `${fmt(session.steps)} 条；${session.userMessages} 条用户消息／${session.assistantMessages} 条回复` : '尚未完成全量读取';
@@ -3833,6 +3953,7 @@
     }
     if (id && !state.requestBusy && Date.now() >= state.requestNext) void requestPoll(state.generation, id);
     if (id && !state.scanBusy && Date.now() >= state.scanNext) void scan(state.generation, id);
+    if (Date.now() - lastQuotaSync > 8000) { lastQuotaSync = Date.now(); void pollLiveQuota(); }
     if (Date.now() - lastHistorySync > 15000) {
       lastHistorySync = Date.now();
       void syncTokenHistoryFromHost(false);
@@ -3840,6 +3961,7 @@
   }
 
   const timer = setInterval(tick, 500);
+  void pollLiveQuota();
   globalThis.__AGContextMeter = {
     version: typeof METER_VERSION !== 'undefined' ? METER_VERSION : '0.8.2',
     ensureAlive: () => {

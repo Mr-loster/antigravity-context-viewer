@@ -1255,3 +1255,94 @@
       #panel{width:calc(100vw - 24px)}
       #panel-tokens:not(.cost-compact-view){width:calc(100vw - 24px)}
     }
+
+/* ─────────────────────────────────────────────────────────────
+   极简状态与模型配额监控组件样式规范
+   ───────────────────────────────────────────────────────────── */
+:host {
+  --ag-quota-good: #10b981;
+  --ag-quota-warn: #f59e0b;
+  --ag-quota-danger: #ef4444;
+}
+
+#badge-quota {
+  color: var(--ag-quota-good, #10b981);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+}
+#badge-quota:hover, #badge-quota:focus-visible, #badge-quota[aria-expanded="true"] {
+  color: var(--ag-toolbar-fg-hover);
+}
+.quota-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+:host([data-layout="compact"]) #badge-quota {
+  padding: 0 5px; font-size: 11px; gap: 3px;
+}
+:host([data-layout="minimal"]) #badge-quota {
+  display: none !important;
+}
+:host([data-layout="ring-only"]) #badge-quota {
+  display: none !important;
+}
+
+.ag-clean-card {
+  background: var(--ag-bg-card);
+  border: 1px solid var(--ag-border-card);
+  border-radius: 8px;
+  padding: 11px 12px;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+
+.quota-model-box {
+  background: var(--ag-bg-subcard, rgba(0, 0, 0, 0.03));
+  border: 1px solid var(--ag-border-subcard, rgba(0, 0, 0, 0.06));
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+:host([data-theme="dark"]) .quota-model-box,
+:host([data-panel-tone="dark"]) .quota-model-box {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.07);
+}
+.quota-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+}
+.quota-model-name {
+  font-weight: 600;
+  color: var(--ag-text-primary);
+}
+.quota-model-pct {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+.quota-bar-track {
+  width: 100%;
+  height: 6px;
+  background: var(--ag-bar-track, rgba(125, 125, 125, 0.2));
+  border-radius: 3px;
+  overflow: hidden;
+}
+.quota-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s ease;
+}
+.quota-row-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: var(--ag-text-muted);
+}
