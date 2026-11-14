@@ -10,8 +10,7 @@ const core = require('./meter-core');
 const {
   loadCustomPlanSettings,
   savePluginSettings,
-  getPluginSettings,
-  launchCliSession
+  getPluginSettings
 } = require('./meter-collector');
 
 const rendererSource = fs.readFileSync(path.join(__dirname, 'meter-renderer.js'), 'utf8');
@@ -295,4 +294,23 @@ test('单元测试：BaseWindow / WebContentsView 架构适配与 WebContents �
   if (typeof closedListener === 'function') {
     assert.doesNotThrow(() => closedListener(), '窗口关闭时清理探测定时器绝不抛错');
   }
+});
+
+// ============================================================================
+// 12. 回归验证：渲染包无残留未定义引用、孤儿组件自愈清理与模块可加载性
+// ============================================================================
+test('回归验证：渲染包语法与关键依赖符号完整、僵尸节点防重插守卫生效', () => {
+  assert.doesNotThrow(() => new vm.Script(rendererSource), 'meter-renderer.js 必须无语法错误');
+  assert.equal(rendererSource.includes('function hexToRgb('), true, '渲染包必须包含 hexToRgb 定义（供累计曲线使用）');
+  assert.equal(/\bsyncNativeOverlayTheme\s*\(/.test(rendererSource), false, '渲染包不得保留已删除的 syncNativeOverlayTheme 调用');
+  assert.equal(/\bpositionColorPickerPopover\s*\(/.test(rendererSource), false, '渲染包不得保留已删除的 positionColorPickerPopover 调用');
+  assert.equal(/\bonPointerMove\b|\bonPointerUp\b|\bthemeObserver\b/.test(rendererSource), false, 'dispose 不得引用已删除的监听器或观察者符号');
+  assert.equal(rendererSource.includes('__agMeterZombie'), true, '渲染包必须包含僵尸节点防重插守卫');
+
+  const collectorSource = fs.readFileSync(path.join(__dirname, 'meter-collector.js'), 'utf8');
+  assert.equal(collectorSource.includes('extractWorkspaceFromTrajectory'), false, 'meter-collector.js 不得保留已删除的 extractWorkspaceFromTrajectory 调用');
+
+  const liveHostSource = fs.readFileSync(path.join(__dirname, 'live-host.js'), 'utf8');
+  assert.doesNotThrow(() => new vm.Script(liveHostSource), 'live-host.js 必须无语法错误');
+  assert.equal(liveHostSource.includes('launchCliSession'), false, 'live-host.js 不得引用已删除的 launchCliSession');
 });

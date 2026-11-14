@@ -73,6 +73,13 @@
     return '';
   }
 
+  function hexToRgb(hexStr) {
+    const clean = normalizeHex(hexStr);
+    if (!clean) return null;
+    const n = parseInt(clean.slice(1), 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+
   function getSystemTheme() {
     try {
       if (typeof document !== 'undefined') {

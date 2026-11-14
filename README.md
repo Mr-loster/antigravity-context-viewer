@@ -53,17 +53,23 @@ node cli.js install
 node cli.js status
 ```
 
-### 💻 终端手动安装
+### 💻 终端手动安装与常用命令
 ```bash
 # 克隆仓库
 git clone https://github.com/Mr-loster/antigravity-context-viewer.git
 cd antigravity-context-viewer
 
-# 一键安装
+# 一键安装（ASAR 持久化注入 + 运行中窗口免重启热挂载）
 node cli.js install
 
-# 查看状态
+# 仅对当前运行中窗口进行热重载（开发/调试时使用）
+node cli.js live
+
+# 查看安装与当前会话上下文状态
 node cli.js status
+
+# 执行自检与诊断（macOS / Windows / Linux 全平台支持）
+node cli.js check
 
 # 如需无损还原卸载
 node cli.js restore
@@ -71,22 +77,48 @@ node cli.js restore
 
 ---
 
+## 🛠️ 开发构建与测试 (Development & Testing)
+
+本项目纯原生 Node.js 实现（要求 Node.js `>= 22.4.0`），零外部 npm 运行时依赖：
+
+```bash
+# 重新打包构建极简渲染层产物 (src/renderer -> meter-renderer.js)
+npm run build:renderer
+
+# 构建并运行全量单元与集成回归测试（63 项测试）
+npm test
+```
+
+> **架构与稳定性优化**：
+> - **全平台自适应**：自动识别 macOS (`~/Library/Application Support/Antigravity`)、Windows (`%APPDATA%\Antigravity`) 与 Linux (`~/.config/Antigravity`) 数据及 DevTools 端口路径；
+> - **免重启热重载与自愈机制**：内置多实例清理与僵尸 DOM 防重插守卫，执行 `node cli.js install` 或 `node cli.js live` 时可无感热更新当前窗口，不留残留组件。
+
+---
+
 ## 📁 仓库核心结构
 
 ```text
 antigravity-context-viewer/
-├── asar-engine.js        # 原生零依赖 Node.js ASAR 解包/打包引擎
-├── cli.js                # 统一命令行入口 (install / live / status / restore)
-├── install.js            # ASAR 注入与运行时热挂载调度器
-├── restore.js            # 原始备份校验与无损还原器
-├── meter-renderer.js     # 极简渲染层构建产物
-├── src/renderer/         # 极简渲染层源码
-│   ├── main.js           # 状态调度、Quota 配额轮询与顶栏胶囊联动
-│   ├── template.html     # 极简双看板 Shadow DOM 结构
-│   ├── styles.css        # 紧凑玻璃拟态样式与深浅主题自适应
-│   └── heatmap.js        # 52周活跃热力图渲染引擎
+├── asar-engine.js            # 原生零依赖 Node.js ASAR 解包/打包引擎
+├── cli.js                    # 统一命令行入口 (install / live / status / check / restore)
+├── install.js                # ASAR 注入与运行时热挂载调度器
+├── live-host.js              # 运行中窗口免重启 CDP 实时桥接宿主
+├── local-api.js              # 跨平台 DevTools / 本地语言服务通信模块
+├── meter-collector.js        # 会话上下文、历史 Token 与设置持久化采集引擎
+├── meter-core.js             # 上下文占比、速度计算与热力图核心纯函数
+├── meter-main.js             # Electron 主进程预加载与 IPC 桥接注入脚本
+├── restore.js                # 原始备份校验与无损还原器
+├── meter-renderer.js         # 极简渲染层构建产物
+├── meter-core.test.js        # 核心算法与数据聚合单元测试
+├── meter-integration.test.js # 热挂载、跨平台及渲染回归集成测试
+├── src/renderer/             # 极简渲染层源码
+│   ├── main.js               # 状态调度、Quota 配额轮询、顶栏联动与热更新自愈
+│   ├── template.html         # 极简双看板 Shadow DOM 结构
+│   ├── styles.css            # 紧凑玻璃拟态样式与深浅主题自适应
+│   ├── colors.js             # 主题色板、Hex/RGB 转换与对比度工具
+│   └── heatmap.js            # 52周活跃热力图与峰值/聚合指标渲染引擎
 └── scripts/
-    └── build-renderer.js # 纯 Node.js 渲染层自动构建脚本
+    └── build-renderer.js     # 纯 Node.js 渲染层自动构建脚本
 ```
 
 ---

@@ -265,25 +265,40 @@
 
   function updateSummaryBar(viewType, dateKeys = []) {
     const sumTokensEl = el('h-sum-tokens');
+    const sumPeakEl = el('h-peak-val');
     const sumCostEl = el('h-sum-cost');
     const sumDailyAvgEl = el('h-sum-daily-avg');
     const sumActiveAvgEl = el('h-sum-active-avg');
     const subRatioWrapEl = el('h-sum-sub-ratio-wrap');
     const subRatioEl = el('h-sum-sub-ratio');
-    if (!sumTokensEl || !sumCostEl) return;
+    if (!sumTokensEl) return;
 
     const win = computeTimelineWindow();
     const todayStr = formatLocalYmd(win.today);
-    const costAgg = calculateIntervalCost(ANTIGRAVITY_TOKEN_DATA.dailyMap, dateKeys, activeCostModel, {
+    const map = ANTIGRAVITY_TOKEN_DATA.dailyMap || {};
+    const costAgg = calculateIntervalCost(map, dateKeys, activeCostModel, {
       mode: activeCostMode,
       todayStr
     });
 
     const cny = convertToCNY(costAgg.totalCostUSD, 'USD');
     sumTokensEl.textContent = `${fmtYi(costAgg.totalTokens)} Tokens`;
-    sumCostEl.textContent = `≈ $${costAgg.totalCostUSD.toFixed(2)}${cny !== null ? ` (¥${cny.toFixed(2)})` : ''}`;
-    sumDailyAvgEl.textContent = `$${costAgg.dailyAverageUSD.toFixed(2)}`;
-    sumActiveAvgEl.textContent = `$${costAgg.activeDailyAverageUSD.toFixed(2)} (${costAgg.activeDays}天)`;
+    if (sumPeakEl) {
+      let peakVal = 0;
+      let peakKey = '';
+      for (const k of dateKeys) {
+        if (k > todayStr) continue;
+        const t = Number(map[k]?.total) || 0;
+        if (t > peakVal) {
+          peakVal = t;
+          peakKey = k;
+        }
+      }
+      sumPeakEl.textContent = peakVal > 0 ? `${fmtYi(peakVal)} (${peakKey.slice(5)})` : '--';
+    }
+    if (sumCostEl) sumCostEl.textContent = `≈ $${costAgg.totalCostUSD.toFixed(2)}${cny !== null ? ` (¥${cny.toFixed(2)})` : ''}`;
+    if (sumDailyAvgEl) sumDailyAvgEl.textContent = `$${costAgg.dailyAverageUSD.toFixed(2)}`;
+    if (sumActiveAvgEl) sumActiveAvgEl.textContent = `$${costAgg.activeDailyAverageUSD.toFixed(2)} (${costAgg.activeDays}天)`;
 
     if ((viewType === 'monthly' || viewType === 'yearly') && subRatioWrapEl && subRatioEl) {
       const plan = resolveEffectivePlanStatus(ANTIGRAVITY_TOKEN_DATA.planStatus, ANTIGRAVITY_TOKEN_DATA.customPlanSettings);

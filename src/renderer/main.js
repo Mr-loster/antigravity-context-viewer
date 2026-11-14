@@ -1,7 +1,55 @@
 (function () {
   'use strict';
   if (location.protocol !== 'https:' || location.hostname !== '127.0.0.1') return;
-  globalThis.__AGContextMeter?.dispose();
+  try { globalThis.__AGContextMeter?.dispose?.(); } catch {}
+  if (globalThis.__AGContextMeterInstances instanceof Set) {
+    for (const fn of Array.from(globalThis.__AGContextMeterInstances)) {
+      try { fn?.(); } catch {}
+    }
+    globalThis.__AGContextMeterInstances.clear();
+  } else {
+    globalThis.__AGContextMeterInstances = new Set();
+  }
+  try {
+    const orphans = typeof document.querySelectorAll === 'function'
+      ? Array.from(document.querySelectorAll('#ag-context-meter'))
+      : [];
+    const unhandledOrphans = orphans.filter(node => typeof node?.__agDispose !== 'function');
+    if (unhandledOrphans.length > 0 && globalThis.__agZombieDomGuardInstalled !== 2) {
+      globalThis.__agZombieDomGuardInstalled = 2;
+      const candidateProtos = [];
+      if (typeof HTMLDivElement !== 'undefined' && HTMLDivElement.prototype) candidateProtos.push(HTMLDivElement.prototype);
+      if (typeof HTMLElement !== 'undefined' && HTMLElement.prototype) candidateProtos.push(HTMLElement.prototype);
+      if (typeof Element !== 'undefined' && Element.prototype) candidateProtos.push(Element.prototype);
+      if (typeof Node !== 'undefined' && Node.prototype) candidateProtos.push(Node.prototype);
+      for (const proto of candidateProtos) {
+        for (const method of ['insertBefore', 'appendChild']) {
+          if (Object.prototype.hasOwnProperty.call(proto, method) && typeof proto[method] === 'function' && !proto[method].__agZombieWrapped) {
+            const orig = proto[method];
+            const wrapped = function (newNode) {
+              if (newNode && newNode.__agMeterZombie === true) return newNode;
+              return orig.apply(this, arguments);
+            };
+            wrapped.__agZombieWrapped = true;
+            proto[method] = wrapped;
+          }
+        }
+      }
+    }
+    for (const node of orphans) {
+      try {
+        if (typeof node.__agDispose === 'function') {
+          node.__agDispose();
+        } else {
+          node.__agMeterZombie = true;
+          try { node.shadowRoot?.replaceChildren?.(); } catch {}
+          node.remove?.();
+        }
+      } catch {}
+    }
+    document.getElementById?.('ag-wco-spacer')?.remove?.();
+    document.getElementById?.('ag-topbar-host-fix')?.remove?.();
+  } catch {}
   const {
     summarize,
     parseGeneratorCall,
@@ -75,6 +123,55 @@
     disposed: false, layoutMode: 'wide', tooltipOpen: false,
     reportedFinalCallIds: new Set(), reportedFinalCallOutputs: new Map()
   };
+  let timer = null;
+  let resizeObserver = null;
+  let hostDomObserver = null;
+  let observedTitlebar = null;
+  let layoutRaf = 0;
+  let onWindowResize = null;
+  let onWindowFocus = null;
+  let onWindowBlur = null;
+  let outside = null;
+  let escape = null;
+  const disposeInstance = () => {
+    if (state.disposed) return;
+    state.disposed = true;
+    for (const controller of state.controllers) {
+      try { controller.abort(); } catch {}
+    }
+    state.controllers.clear();
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+    if (layoutRaf && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(layoutRaf);
+      layoutRaf = 0;
+    }
+    try {
+      if (typeof syncHostStackingElevation === 'function') syncHostStackingElevation(false);
+    } catch {}
+    try { resizeObserver?.disconnect(); } catch {}
+    try { hostDomObserver?.disconnect(); } catch {}
+    try {
+      if (typeof onWindowResize === 'function') window.removeEventListener?.('resize', onWindowResize);
+      if (typeof onWindowFocus === 'function') window.removeEventListener?.('focus', onWindowFocus);
+      if (typeof onWindowBlur === 'function') window.removeEventListener?.('blur', onWindowBlur);
+      if (typeof onWindowResize === 'function') navigator?.windowControlsOverlay?.removeEventListener?.('geometrychange', onWindowResize);
+    } catch {}
+    try {
+      if (typeof outside === 'function') document.removeEventListener?.('click', outside);
+      if (typeof escape === 'function') document.removeEventListener?.('keydown', escape);
+    } catch {}
+    try { document.getElementById?.('ag-wco-spacer')?.remove?.(); } catch {}
+    try { document.getElementById?.('ag-topbar-host-fix')?.remove?.(); } catch {}
+    try { host.remove?.(); } catch {}
+    try { globalThis.__AGContextMeterInstances?.delete?.(disposeInstance); } catch {}
+  };
+  try {
+    host.__agDispose = disposeInstance;
+    globalThis.__AGContextMeterInstances?.add?.(disposeInstance);
+  } catch {}
   const route = () => location.pathname.match(/^\/c\/([a-f\d-]{36})(?:\/|$)/i)?.[1] || null;
   let activeHeatView = 'daily';
   let heatPageOffset = 0;
@@ -89,10 +186,6 @@
   // =========================================================================
   // 模块 2: 宿主布局挂载、右上角原生窗口控制区预留、渐进式宽度收缩与悬浮层定位
   // =========================================================================
-  let resizeObserver = null;
-  let hostDomObserver = null;
-  let observedTitlebar = null;
-  let layoutRaf = 0;
 
   function findHostTitlebar() {
     try {
@@ -283,7 +376,6 @@
           styleEl.textContent = cssText;
         }
       }
-      syncNativeOverlayTheme();
     } catch {}
   }
 
@@ -653,7 +745,6 @@
       placePanel(el('panel'), 450, el('badge'));
       placePanel(el('panel-tokens'), 730, el('badge-tokens'));
       placePanel(el('overflow-menu'), 220, el('badge-overflow'));
-      positionColorPickerPopover();
     } catch {}
   }
 
@@ -672,9 +763,9 @@
     }
   } catch {}
 
-  const onWindowResize = () => updateResponsiveLayout();
-  const onWindowFocus = () => host.setAttribute('data-window-active', 'true');
-  const onWindowBlur = () => host.setAttribute('data-window-active', 'false');
+  onWindowResize = () => updateResponsiveLayout();
+  onWindowFocus = () => host.setAttribute('data-window-active', 'true');
+  onWindowBlur = () => host.setAttribute('data-window-active', 'false');
   try {
     window.addEventListener?.('resize', onWindowResize);
     window.addEventListener?.('focus', onWindowFocus);
@@ -887,6 +978,11 @@
   // 异步时序保护：用户主动修改序列号与恢复请求版本号
   let userActionSeq = 0;
   let restoreRequestSeq = 0;
+  let activeBadgeTimerId = null;
+  let activeCnyTimerId = null;
+  let activeBadgeRafId = null;
+  let lastBadgePriceState = null;
+  let lastSavedCustomPlan = null;
 
   function renderPlanSummaryPriceBadge(targetSymbol, targetNum, targetCycle, targetCnyText, options = {}) {
     const priceValEl = el('plan-summary-price-val');
@@ -1306,10 +1402,6 @@
     }
     positionFloatingPanels();
   }
-  el('cost-details-pane');
-  el('cost-non-paid-badge');
-  el('cost-scope-desc');
-  el('tokens-main-view');
   el('btn-cost-details-toggle')?.addEventListener('click', () => toggleCostDetails());
   el('btn-cost-details-collapse')?.addEventListener('click', () => toggleCostDetails(false));
   el('btn-cost-fill-sub')?.addEventListener('click', () => {
@@ -2498,8 +2590,8 @@
     renderActiveHeatView(true);
     updateHeatTabThumb();
 
-    if (save && typeof window !== 'undefined' && typeof window.contextMeterAPI?.saveSettings === 'function') {
-      window.contextMeterAPI.saveSettings({ savedHeatView: view });
+    if (save) {
+      void saveSettingsBridge({ savedHeatView: view });
     }
   }
 
@@ -2549,7 +2641,7 @@
   });
 
   el('refresh').addEventListener('click', () => { if (state.route && !state.scanBusy) void scan(state.generation, state.route, true); });
-  const outside = e => {
+  outside = e => {
     const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
     const pop = el('color-picker-popover');
     if (!path.includes(host)) {
@@ -2570,7 +2662,7 @@
       }
     }
   };
-  const escape = e => {
+  escape = e => {
     if (e.key === 'Escape') {
       const pop = el('color-picker-popover');
       const isEscClosing = pop?.classList ? pop.classList.contains('is-closing') : pop?.getAttribute('data-closing') === 'true';
@@ -2992,35 +3084,35 @@
   }
 
 
+  async function saveSettingsBridge(payload) {
+    if (typeof window !== 'undefined' && window.__AGContextMeterLive?.port) {
+      try {
+        const res = await callLiveBridge('/save-settings', payload || {}, 10000);
+        if (res) return res;
+      } catch {}
+    }
+    if (typeof window !== 'undefined' && typeof window.contextMeterAPI?.saveSettings === 'function') {
+      return await window.contextMeterAPI.saveSettings(payload);
+    }
+    return null;
+  }
+
   async function recordModelCallsRemote(calls) {
     if (!calls || !calls.length) return;
     let changed = false;
     const hasFinalCall = calls.some(c => c?.status === 'final');
     try {
-      if (typeof window !== 'undefined' && typeof window.contextMeterAPI?.recordCalls === 'function') {
-        const res = await window.contextMeterAPI.recordCalls(calls);
-        if (res && res.ok === false) {
-          console.warn('Context Meter: 记录调用入账失败', res.error);
-        } else if (res?.changed) {
-          changed = true;
-        }
-      } else if (typeof window !== 'undefined' && window.__AGContextMeterLive?.port) {
-        const live = window.__AGContextMeterLive;
-        const resp = await fetch(`http://127.0.0.1:${live.port}/record-calls`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-AG-Context-Token': live.token },
-          body: JSON.stringify({ calls })
-        });
-        if (!resp.ok) {
-          console.warn(`Context Meter: 实时通道 record-calls 响应异常 HTTP ${resp.status}`);
-        } else {
-          const res = await resp.json().catch(() => null);
-          if (res && res.ok === false) {
-            console.warn('Context Meter: 实时通道 record-calls 失败', res.error);
-          } else if (res?.changed) {
-            changed = true;
-          }
-        }
+      let res = null;
+      if (typeof window !== 'undefined' && window.__AGContextMeterLive?.port) {
+        try { res = await callLiveBridge('/record-calls', { calls }, 15000); } catch {}
+      }
+      if (!res && typeof window !== 'undefined' && typeof window.contextMeterAPI?.recordCalls === 'function') {
+        res = await window.contextMeterAPI.recordCalls(calls);
+      }
+      if (res && res.ok === false) {
+        console.warn('Context Meter: 记录调用入账失败', res.error);
+      } else if (res?.changed) {
+        changed = true;
       }
       if (changed || hasFinalCall) {
         void syncTokenHistoryFromHost(false);
@@ -3038,18 +3130,14 @@
       let settingsRes = null;
       const currentEmail = ANTIGRAVITY_TOKEN_DATA.planStatus?.email || 'default';
 
-      // 权威配置同步：宿主通信桥接可用时，以宿主最新持久化配置为准，避免启动快照覆盖最新状态
-      if (typeof window !== 'undefined' && typeof window.contextMeterAPI?.getSettings === 'function') {
+      // 权威配置同步：实时通道或宿主通信桥接可用时，以宿主最新持久化配置为准，避免启动快照覆盖最新状态
+      if (typeof window !== 'undefined' && window.__AGContextMeterLive?.port) {
+        try { settingsRes = await callLiveBridge('/get-settings', { email: currentEmail }, 10000); } catch {}
+      }
+      if (!settingsRes?.ok && typeof window !== 'undefined' && typeof window.contextMeterAPI?.getSettings === 'function') {
         settingsRes = await window.contextMeterAPI.getSettings({ email: currentEmail });
-      } else if (typeof window !== 'undefined' && window.__AGContextMeterLive?.port) {
-        const live = window.__AGContextMeterLive;
-        const r = await fetch(`http://127.0.0.1:${live.port}/get-settings`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-AG-Context-Token': live.token },
-          body: JSON.stringify({ email: currentEmail })
-        });
-        if (r.ok) settingsRes = await r.json().catch(() => null);
-      } else if (typeof window !== 'undefined' && window.__AGContextMeterSettings?.ok) {
+      }
+      if (!settingsRes?.ok && typeof window !== 'undefined' && window.__AGContextMeterSettings?.ok) {
         settingsRes = window.__AGContextMeterSettings;
       }
 
@@ -3085,7 +3173,9 @@
           if (email && email !== 'default') localStorage?.setItem('ag_custom_plan_' + String(email).toLowerCase(), jsonStr);
           localStorage?.setItem('ag_custom_plan_default', jsonStr);
         } catch {}
-        applyCustomPlanObjectLocally(settingsRes.customPlan, email);
+        if (typeof applyCustomPlanObjectLocally === 'function') {
+          applyCustomPlanObjectLocally(settingsRes.customPlan, email);
+        }
       } else {
         // 回退检查 localStorage
         const email = ANTIGRAVITY_TOKEN_DATA.planStatus?.email || 'default';
@@ -3095,7 +3185,9 @@
           const parsed = JSON.parse(savedRaw);
           if (parsed && typeof parsed === 'object') {
             lastSavedCustomPlan = { ...parsed };
-            applyCustomPlanObjectLocally(parsed, parsed.account || email);
+            if (typeof applyCustomPlanObjectLocally === 'function') {
+              applyCustomPlanObjectLocally(parsed, parsed.account || email);
+            }
           }
         }
       }
@@ -3120,26 +3212,16 @@
           applyTokenHistoryPayload(window.__AGContextMeterHistory);
         }
       }
-      if (typeof window !== 'undefined' && typeof window.contextMeterAPI?.getTokenHistory === 'function') {
-        const res = await window.contextMeterAPI.getTokenHistory(Boolean(force));
-        if (res?.ok && res.data) {
-          if (typeof window !== 'undefined') window.__AGContextMeterHistory = res.data;
-          applyTokenHistoryPayload(res.data);
-        }
-      } else if (typeof window !== 'undefined' && window.__AGContextMeterLive?.port) {
-        const live = window.__AGContextMeterLive;
-        const r = await fetch(`http://127.0.0.1:${live.port}/token-history`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-AG-Context-Token': live.token },
-          body: JSON.stringify({ force: Boolean(force) })
-        });
-        if (r.ok) {
-          const j = await r.json();
-          if (j?.ok && j.data) {
-            if (typeof window !== 'undefined') window.__AGContextMeterHistory = j.data;
-            applyTokenHistoryPayload(j.data);
-          }
-        }
+      let historyRes = null;
+      if (typeof window !== 'undefined' && window.__AGContextMeterLive?.port) {
+        try { historyRes = await callLiveBridge('/token-history', { force: Boolean(force) }, 30000); } catch {}
+      }
+      if (!historyRes?.ok && typeof window !== 'undefined' && typeof window.contextMeterAPI?.getTokenHistory === 'function') {
+        historyRes = await window.contextMeterAPI.getTokenHistory(Boolean(force));
+      }
+      if (historyRes?.ok && historyRes.data) {
+        if (typeof window !== 'undefined') window.__AGContextMeterHistory = historyRes.data;
+        applyTokenHistoryPayload(historyRes.data);
       }
     } catch {}
     finally {
@@ -3402,9 +3484,7 @@
 
   el('check-auto-update')?.addEventListener('change', e => {
     autoCheckUpdate = e.target.checked;
-    if (typeof window !== 'undefined' && typeof window.contextMeterAPI?.saveSettings === 'function') {
-      window.contextMeterAPI.saveSettings({ autoCheckUpdate });
-    }
+    void saveSettingsBridge({ autoCheckUpdate });
   });
 
   /* @INSERT_HEATMAP_MODULE */
@@ -3568,11 +3648,15 @@
     const qAmount = el('quota-amount');
     const bQuota = el('badge-quota');
     const ovQuota = el('overflow-quota-val');
-    if (qAmount && gRes && cRes) {
-      const qText = `G:${Math.round(gRes.wPct)}% C:${Math.round(cRes.wPct)}%`;
+    if (qAmount && (gRes || cRes)) {
+      const parts = [];
+      if (gRes) parts.push(`G:${Math.round(gRes.wPct)}%`);
+      if (cRes) parts.push(`C:${Math.round(cRes.wPct)}%`);
+      const qText = parts.join(' ');
       qAmount.textContent = qText;
       if (ovQuota) ovQuota.textContent = qText;
-      const minPct = Math.min(gRes.wPct, cRes.wPct);
+      const pcts = [gRes?.wPct, cRes?.wPct].filter(v => typeof v === 'number');
+      const minPct = pcts.length ? Math.min(...pcts) : 100;
       if (bQuota) {
         bQuota.style.color = getQuotaColor(minPct);
       }
@@ -3908,17 +3992,40 @@
     finally { clearTimeout(timeout); state.controllers.delete(controller); if (generation === state.generation && !state.disposed) { state.requestBusy = false; state.requestNext = Date.now() + (document.hidden ? 15000 : 3000); render(); } }
   }
 
+  async function callLiveBridge(routePath, bodyPayload = {}, timeoutMs = 15000) {
+    const live = typeof window !== 'undefined' ? window.__AGContextMeterLive : null;
+    if (!live?.port) return null;
+    const controller = new AbortController();
+    state.controllers.add(controller);
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(`http://127.0.0.1:${live.port}${routePath}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-AG-Context-Token': live.token },
+        body: JSON.stringify(bodyPayload),
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json().catch(() => null);
+    } finally {
+      clearTimeout(t);
+      state.controllers.delete(controller);
+    }
+  }
+
   async function scan(generation, id, force = false) {
     state.scanBusy = true; render();
     try {
-      let result;
-      if (window.contextMeterAPI?.scan) result = await window.contextMeterAPI.scan(id, force);
-      else if (window.__AGContextMeterLive) {
-        const live = window.__AGContextMeterLive, controller = new AbortController(); state.controllers.add(controller);
-        const timeout = setTimeout(() => controller.abort(), 180000);
-        try { const response = await fetch(`http://127.0.0.1:${live.port}/scan`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-AG-Context-Token': live.token }, body: JSON.stringify({ id, force }), signal: controller.signal }); if (!response.ok) throw new Error(`扫描接口 HTTP ${response.status}`); result = await response.json(); }
-        finally { clearTimeout(timeout); state.controllers.delete(controller); }
-      } else throw new Error('完整重启 Antigravity 后启用附件扫描');
+      let result = null;
+      if (typeof window !== 'undefined' && window.__AGContextMeterLive?.port) {
+        try { result = await callLiveBridge('/scan', { id, force }, 180000); } catch {}
+      }
+      if (!result?.ok && typeof window !== 'undefined' && window.contextMeterAPI?.scan) {
+        result = await window.contextMeterAPI.scan(id, force);
+      }
+      if (!result && (typeof window === 'undefined' || (!window.contextMeterAPI?.scan && !window.__AGContextMeterLive?.port))) {
+        throw new Error('完整重启 Antigravity 后启用附件扫描');
+      }
       if (generation !== state.generation || state.disposed) return;
       if (!result?.ok) throw new Error(result?.error || '扫描未返回有效结果');
       state.scan = result.data; state.scanError = '';
@@ -3959,7 +4066,7 @@
     }
   }
 
-  const timer = setInterval(tick, 500);
+  timer = setInterval(tick, 500);
   void pollLiveQuota();
   globalThis.__AGContextMeter = {
     version: typeof METER_VERSION !== 'undefined' ? METER_VERSION : '0.8.2',
@@ -3992,29 +4099,7 @@
     syncWindowControlsOverlayForTest: () => syncWindowControlsOverlay(),
     computeWindowControlsWidthForTest: el => computeWindowControlsWidth(el),
     snapshot: () => ({ route: state.route, count: state.count, latest: state.latest, scan: state.scan, requestError: state.requestError, scanError: state.scanError, scanBusy: state.scanBusy, layoutMode: state.layoutMode, sessionCalls: state.sessionCalls, sessionCostTotal: state.sessionCostTotal }),
-    dispose() {
-      state.disposed = true;
-      for (const controller of state.controllers) controller.abort();
-      clearInterval(timer);
-      if (layoutRaf && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(layoutRaf);
-      syncHostStackingElevation(false);
-      try { themeObserver?.disconnect(); } catch {}
-      try { resizeObserver?.disconnect(); } catch {}
-      try { hostDomObserver?.disconnect(); } catch {}
-      try {
-        window.removeEventListener?.('resize', onWindowResize);
-        window.removeEventListener?.('focus', onWindowFocus);
-        window.removeEventListener?.('blur', onWindowBlur);
-        window.removeEventListener?.('mousemove', onPointerMove);
-        window.removeEventListener?.('mouseup', onPointerUp);
-        navigator?.windowControlsOverlay?.removeEventListener?.('geometrychange', onWindowResize);
-      } catch {}
-      document.removeEventListener('click', outside);
-      document.removeEventListener('keydown', escape);
-      try { document.getElementById('ag-wco-spacer')?.remove?.(); } catch {}
-      try { document.getElementById('ag-topbar-host-fix')?.remove?.(); } catch {}
-      host.remove();
-    }
+    dispose: disposeInstance
   };
   void restoreSettingsFromHost();
   render();

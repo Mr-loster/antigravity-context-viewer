@@ -53,17 +53,42 @@ node cli.js install
 node cli.js status
 ```
 
-### 💻 Manual CLI Installation
+### 💻 Manual CLI Installation & Commands
 ```bash
 git clone https://github.com/Mr-loster/antigravity-context-viewer.git
 cd antigravity-context-viewer
 
+# Persistent injection + live hot-reload
 node cli.js install
+
+# Force live hot-reload for the running Antigravity window
+node cli.js live
+
+# Check status and diagnostics (supports macOS / Windows / Linux)
 node cli.js status
+node cli.js check
 
 # To restore
 node cli.js restore
 ```
+
+---
+
+## 🛠️ Development & Testing
+
+Pure zero-dependency Node.js implementation (`Node.js >= 22.4.0`):
+
+```bash
+# Rebuild the bundled renderer from src/renderer/
+npm run build:renderer
+
+# Rebuild and run all unit & integration regression tests (63 tests)
+npm test
+```
+
+> **Cross-Platform & Stability Highlights**:
+> - **Cross-Platform Support**: Automatically resolves Antigravity data and `DevToolsActivePort` paths across macOS, Windows, and Linux;
+> - **Live Hot-Reload Self-Healing**: Built-in orphan instance cleanup and zombie DOM insertion guards ensure seamless hot-reloads with zero leftover UI elements.
 
 ---
 

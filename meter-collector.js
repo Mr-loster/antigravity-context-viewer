@@ -208,8 +208,7 @@ async function collect(origin, id, options = {}) {
     const full = await call('GetCascadeTrajectory', { cascadeId: id, trajectoryVerbosity: 3 });
     const trajectory = full.trajectory;
     if (!trajectory) throw new Error('未取得会话历史，无法完整统计');
-    const wsPath = extractWorkspaceFromTrajectory(trajectory);
-    if (wsPath) conversationWorkspaces.set(id.toLowerCase(), wsPath);
+    const wsPath = null;
     const steps = trajectory.steps || [];
     const expected = Number(full.numTotalSteps ?? steps.length);
     while (steps.length < expected) {

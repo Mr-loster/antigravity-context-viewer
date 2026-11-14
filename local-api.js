@@ -1,7 +1,15 @@
 'use strict';
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const http = require('http');
 const https = require('https');
+function getDevToolsPortFile() {
+  const appData = process.env.APPDATA || (process.platform === 'darwin'
+    ? path.join(os.homedir(), 'Library', 'Application Support')
+    : path.join(os.homedir(), '.config'));
+  return path.join(appData, 'Antigravity', 'DevToolsActivePort');
+}
 function request(url, body, token) {
   return new Promise((resolve, reject) => {
     const req = (url.startsWith('https:') ? https : http).request(url, { rejectUnauthorized: false, method: body ? 'POST' : 'GET', headers: body ? { 'Content-Type': 'application/json', 'Connect-Protocol-Version': '1', 'x-codeium-csrf-token': token } : {} }, response => {
@@ -12,7 +20,7 @@ function request(url, body, token) {
   });
 }
 async function connect() {
-  const port = Number(fs.readFileSync(process.env.APPDATA + '/Antigravity/DevToolsActivePort', 'utf8').split(/\r?\n/)[0]);
+  const port = Number(fs.readFileSync(getDevToolsPortFile(), 'utf8').split(/\r?\n/)[0]);
   const pages = JSON.parse(await request(`http://127.0.0.1:${port}/json/list`));
   const page = pages.find(item => item.type === 'page' && /^https:\/\/127\.0\.0\.1:\d+\//.test(item.url));
   if (!page) throw new Error('Antigravity window not found');

@@ -73,7 +73,7 @@ async function queryLiveWindow() {
             return {
               active: Boolean(window.__AGContextMeter),
               version: window.__AGContextMeter?.version || null,
-              hasIpcBridge: Boolean(window.contextMeterAPI?.scan && window.contextMeterAPI?.saveSettings && window.contextMeterAPI?.launchCli && window.contextMeterAPI?.getContextUnlockStatus),
+              hasIpcBridge: Boolean(window.contextMeterAPI?.scan && window.contextMeterAPI?.getTokenHistory && window.contextMeterAPI?.saveSettings),
               badgeText: root?.getElementById('amount')?.textContent || null,
               route: s?.route || null,
               latest: s?.latest || null
@@ -90,9 +90,10 @@ async function queryLiveWindow() {
   }
 }
 
-async function ensureLiveBridgeIfNeeded() {
+async function ensureLiveBridgeIfNeeded({ forceLive = false } = {}) {
   const live = await queryLiveWindow();
-  if (!live.running || !live.pageFound || live.hasIpcBridge) return;
+  if (!live.running || !live.pageFound) return;
+  if (live.hasIpcBridge && !forceLive) return;
   const stateDir = getStateDir();
   const statePath = path.join(stateDir, '.live-session.json');
   const legacyPath = path.join(__dirname, '.live-session.json');
@@ -110,10 +111,11 @@ async function ensureLiveBridgeIfNeeded() {
       }
     } catch {}
   }
-  if (!alive) {
+  if (!alive || forceLive) {
     if (existingInfo?.pid) {
       try { process.kill(existingInfo.pid); } catch {}
     }
+    alive = false;
     try { if (fs.existsSync(statePath)) fs.unlinkSync(statePath); } catch {}
     try { if (fs.existsSync(legacyPath)) fs.unlinkSync(legacyPath); } catch {}
 
@@ -208,7 +210,7 @@ async function main() {
     console.log(`✅ ASAR 持久化注入完成: ${manifest.installed}`);
     console.log(`✅ 运行中窗口热挂载状态: ${manifest.liveInjected ? '已即时生效（无需重启）' : '将在下次启动 Antigravity 时自动生效'}`);
   } else if (cmd === 'live') {
-    await ensureLiveBridgeIfNeeded();
+    await ensureLiveBridgeIfNeeded({ forceLive: true });
     const ok = await tryHotInject();
     if (!ok) throw new Error('未检测到运行中的 Antigravity 主窗口，请先打开 Antigravity 或使用 node cli.js install。');
     console.log('✅ 已通过 CDP 热注入当前运行的 Antigravity 窗口！');
