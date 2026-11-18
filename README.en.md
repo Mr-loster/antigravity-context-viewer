@@ -19,8 +19,8 @@ This project pursues **minimalism, restraint, high information density, and clea
 3. **🛡️ Official Model Quota Monitor**
    - **Native Integration**: Same-origin millisecond-level silent sync, zero external Python process or port overhead;
    - **Dynamic Topbar Pill**: `🛡️ G:97% C:86%` dynamic status pill;
-   - **Gemini Models** (3.8 Flash / Pro): Weekly limit remaining progress bar & percentage + reset countdown; 5-hour limit remaining + refresh countdown;
-   - **Claude & GPT Models** (Sonnet / Opus / GPT): Weekly limit remaining progress bar & percentage + reset countdown; 5-hour limit remaining + refresh countdown.
+   - **Gemini Models** (dynamically reads live model list from official API): Weekly limit remaining progress bar & percentage + reset countdown; 5-hour limit remaining + refresh countdown;
+   - **Claude & GPT Models** (dynamically reads live model list from official API): Weekly limit remaining progress bar & percentage + reset countdown; 5-hour limit remaining + refresh countdown.
 
 4. **📊 Token Activity Heatmap**
    - **Summary Cards**: Total processed tokens, today's usage, this month's usage, this year's usage;

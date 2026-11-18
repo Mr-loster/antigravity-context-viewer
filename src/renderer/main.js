@@ -3625,6 +3625,35 @@
     return '#ef4444';
   }
 
+  function formatQuotaGroupTitle(prefix, group) {
+    const baseTitle = prefix === 'gemini' ? 'Gemini Models' : 'Claude & GPT Models';
+    const rawDesc = String(group?.description || '');
+    const listPart = rawDesc.replace(/^Models within this group:\s*/i, '').trim();
+    if (!listPart) return baseTitle;
+    const rawItems = listPart
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s && !/orchestrator/i.test(s));
+    if (!rawItems.length) return baseTitle;
+    let lastMajor = null;
+    const shortItems = [];
+    for (const item of rawItems) {
+      let s = item.replace(/^(?:Gemini|Claude)\s+/i, '').trim();
+      const majorMatch = s.match(/^(\d+)\s+([A-Za-z].*)$/);
+      if (majorMatch && !/^(?:Flash|Pro|Ultra|Nano|Lite)\b/i.test(majorMatch[2])) {
+        if (lastMajor === majorMatch[1]) {
+          s = majorMatch[2];
+        } else {
+          lastMajor = majorMatch[1];
+        }
+      } else {
+        lastMajor = null;
+      }
+      if (s && !shortItems.includes(s)) shortItems.push(s);
+    }
+    return shortItems.length ? `${baseTitle} (${shortItems.join(' / ')})` : baseTitle;
+  }
+
   function renderQuotaData(data) {
     if (!data?.response?.groups) return;
     lastQuotaSummary = data;
@@ -3640,11 +3669,16 @@
       const wPct = Math.round((weekly?.remainingFraction ?? 1) * 1000) / 10;
       const fPct = Math.round((fiveH?.remainingFraction ?? 1) * 1000) / 10;
 
+      const nEl = el(`ov-${prefix}-name`);
       const wEl = el(`ov-${prefix}-pct`);
       const wBar = el(`ov-${prefix}-bar`);
       const fEl = el(`ov-${prefix}-5h`);
       const rEl = el(`ov-${prefix}-reset`);
 
+      if (nEl) {
+        nEl.textContent = formatQuotaGroupTitle(prefix, group);
+        if (group.description) nEl.title = group.description;
+      }
       if (wEl) {
         wEl.textContent = `${wPct}%`;
         wEl.style.color = getQuotaColor(wPct);

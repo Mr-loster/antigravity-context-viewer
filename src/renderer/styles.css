@@ -580,7 +580,7 @@
       transition:opacity .16s cubic-bezier(0.16,1,0.3,1),transform .16s cubic-bezier(0.16,1,0.3,1),visibility .16s ease;
       contain:layout paint;
     }
-    #panel{width:450px}
+    #panel{width:468px}
     #panel-tokens{width:730px;transition:width .22s cubic-bezier(0.16,1,0.3,1),left .22s cubic-bezier(0.16,1,0.3,1),max-width .22s cubic-bezier(0.16,1,0.3,1),opacity .16s cubic-bezier(0.16,1,0.3,1),transform .16s cubic-bezier(0.16,1,0.3,1)}
     #panel-tokens.cost-compact-view{width:400px!important;max-width:calc(100vw - 24px)}
     .ag-panel[hidden]{display:block!important;opacity:0;transform:translateY(-6px);visibility:hidden;pointer-events:none}
@@ -1012,12 +1012,19 @@
 }
 .quota-model-name {
   font-weight: 600;
+  font-size: 11px;
+  letter-spacing: -0.015em;
   color: var(--ag-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 6px;
 }
 .quota-model-pct {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+  flex-shrink: 0;
 }
 .quota-bar-track {
   width: 100%;

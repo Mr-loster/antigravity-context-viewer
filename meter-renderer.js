@@ -676,7 +676,7 @@
       transition:opacity .16s cubic-bezier(0.16,1,0.3,1),transform .16s cubic-bezier(0.16,1,0.3,1),visibility .16s ease;
       contain:layout paint;
     }
-    #panel{width:450px}
+    #panel{width:468px}
     #panel-tokens{width:730px;transition:width .22s cubic-bezier(0.16,1,0.3,1),left .22s cubic-bezier(0.16,1,0.3,1),max-width .22s cubic-bezier(0.16,1,0.3,1),opacity .16s cubic-bezier(0.16,1,0.3,1),transform .16s cubic-bezier(0.16,1,0.3,1)}
     #panel-tokens.cost-compact-view{width:400px!important;max-width:calc(100vw - 24px)}
     .ag-panel[hidden]{display:block!important;opacity:0;transform:translateY(-6px);visibility:hidden;pointer-events:none}
@@ -1108,12 +1108,19 @@
 }
 .quota-model-name {
   font-weight: 600;
+  font-size: 11px;
+  letter-spacing: -0.015em;
   color: var(--ag-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 6px;
 }
 .quota-model-pct {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+  flex-shrink: 0;
 }
 .quota-bar-track {
   width: 100%;
@@ -1296,7 +1303,7 @@
         <!-- Gemini Models 额度行 -->
         <div class="quota-model-box">
           <div class="quota-row-header">
-            <span class="quota-model-name">Gemini Models (3.8 Flash / Pro)</span>
+            <span id="ov-gemini-name" class="quota-model-name">Gemini Models</span>
             <span id="ov-gemini-pct" class="quota-model-pct" style="color:#10b981">--%</span>
           </div>
           <div class="quota-bar-track">
@@ -1311,7 +1318,7 @@
         <!-- Claude & GPT Models 额度行 -->
         <div class="quota-model-box" style="margin-top:8px">
           <div class="quota-row-header">
-            <span class="quota-model-name">Claude &amp; GPT Models (Sonnet / Opus / GPT)</span>
+            <span id="ov-claude-name" class="quota-model-name">Claude &amp; GPT Models</span>
             <span id="ov-claude-pct" class="quota-model-pct" style="color:#10b981">--%</span>
           </div>
           <div class="quota-bar-track">
@@ -5742,7 +5749,7 @@ function renderHeatmapGrid(forceRebuild = false) {
         tipPct: '当前模型配额已用尽',
         tipDetail: `${pool}额度已耗尽${resetStr}。可手动切换至其他可用模型`,
         statusText: `模型额度耗尽：${pool}额度已用尽${resetStr}。可手动切换至其他可用模型。`,
-        keyTakeaway: `✖ ${pool}额度已耗尽${resetStr}。可手动切换至 Gemini 3.8 Flash 或其他可用模型继续对话。`,
+        keyTakeaway: `✖ ${pool}额度已耗尽${resetStr}。可手动切换至其他可用模型继续对话。`,
         isError: true,
         isOverflow: false
       };
@@ -5995,6 +6002,35 @@ function renderHeatmapGrid(forceRebuild = false) {
     return '#ef4444';
   }
 
+  function formatQuotaGroupTitle(prefix, group) {
+    const baseTitle = prefix === 'gemini' ? 'Gemini Models' : 'Claude & GPT Models';
+    const rawDesc = String(group?.description || '');
+    const listPart = rawDesc.replace(/^Models within this group:\s*/i, '').trim();
+    if (!listPart) return baseTitle;
+    const rawItems = listPart
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s && !/orchestrator/i.test(s));
+    if (!rawItems.length) return baseTitle;
+    let lastMajor = null;
+    const shortItems = [];
+    for (const item of rawItems) {
+      let s = item.replace(/^(?:Gemini|Claude)\s+/i, '').trim();
+      const majorMatch = s.match(/^(\d+)\s+([A-Za-z].*)$/);
+      if (majorMatch && !/^(?:Flash|Pro|Ultra|Nano|Lite)\b/i.test(majorMatch[2])) {
+        if (lastMajor === majorMatch[1]) {
+          s = majorMatch[2];
+        } else {
+          lastMajor = majorMatch[1];
+        }
+      } else {
+        lastMajor = null;
+      }
+      if (s && !shortItems.includes(s)) shortItems.push(s);
+    }
+    return shortItems.length ? `${baseTitle} (${shortItems.join(' / ')})` : baseTitle;
+  }
+
   function renderQuotaData(data) {
     if (!data?.response?.groups) return;
     lastQuotaSummary = data;
@@ -6010,11 +6046,16 @@ function renderHeatmapGrid(forceRebuild = false) {
       const wPct = Math.round((weekly?.remainingFraction ?? 1) * 1000) / 10;
       const fPct = Math.round((fiveH?.remainingFraction ?? 1) * 1000) / 10;
 
+      const nEl = el(`ov-${prefix}-name`);
       const wEl = el(`ov-${prefix}-pct`);
       const wBar = el(`ov-${prefix}-bar`);
       const fEl = el(`ov-${prefix}-5h`);
       const rEl = el(`ov-${prefix}-reset`);
 
+      if (nEl) {
+        nEl.textContent = formatQuotaGroupTitle(prefix, group);
+        if (group.description) nEl.title = group.description;
+      }
       if (wEl) {
         wEl.textContent = `${wPct}%`;
         wEl.style.color = getQuotaColor(wPct);

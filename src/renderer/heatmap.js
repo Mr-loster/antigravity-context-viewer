@@ -638,7 +638,7 @@
         tipPct: '当前模型配额已用尽',
         tipDetail: `${pool}额度已耗尽${resetStr}。可手动切换至其他可用模型`,
         statusText: `模型额度耗尽：${pool}额度已用尽${resetStr}。可手动切换至其他可用模型。`,
-        keyTakeaway: `✖ ${pool}额度已耗尽${resetStr}。可手动切换至 Gemini 3.8 Flash 或其他可用模型继续对话。`,
+        keyTakeaway: `✖ ${pool}额度已耗尽${resetStr}。可手动切换至其他可用模型继续对话。`,
         isError: true,
         isOverflow: false
       };
